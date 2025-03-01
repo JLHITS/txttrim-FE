@@ -1,0 +1,342 @@
+/* Reset styles */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background: #f9f9f9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+/* 🔹 Main Container */
+.container {
+  max-width: 750px;
+  width: 90%;
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+/* 🔹 Title & Subtitle */
+h1 {
+  color: #005eb8;
+  font-size: 28px;
+  margin-bottom: 5px;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 16px;
+  margin-bottom: 25px;
+}
+
+/* 🔹 Textarea */
+textarea {
+  width: 100%;
+  height: 130px;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  outline: none;
+  resize: none;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* 🔹 Controls (Dropdown + Button) */
+.controls {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
+}
+
+label {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+}
+
+select {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+/* 🔹 Buttons */
+button {
+  background: #005eb8;
+  color: white;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+button:hover {
+  background: #004799;
+}
+
+/* 🔹 Output Section */
+.output-container {
+  margin-top: 25px;
+  padding: 25px;
+  background: #f3f7fc;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 🔹 Output Box */
+.output-container h2 {
+  font-size: 20px;
+  color: #005eb8;
+  margin-bottom: 12px;
+}
+
+.output-box {
+  background: white;
+  padding: 18px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  text-align: left;
+  min-height: 80px;
+  cursor: text;
+  word-wrap: break-word;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* 🔹 Copy Button */
+.copy-btn {
+  margin-top: 15px;
+  background: #007f5f;
+  padding: 12px;
+}
+
+.copy-btn:hover {
+  background: #005f47;
+}
+
+/* 🔹 Stats Section */
+.stats {
+  font-size: 15px;
+  color: #444;
+  margin-top: 12px;
+  text-align: left;
+}
+
+/* 🔹 Disclaimer Section */
+.disclaimer-container {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.disclaimer-btn {
+  background: #ffcc00;
+  color: #333;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.disclaimer-btn:hover {
+  background: #e6b800;
+}
+
+.disclaimer-box {
+  margin-top: 15px;
+  background: #fff7cc;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+  text-align: left;
+  font-size: 14px;
+}
+
+.disclaimer-box h3 {
+  font-size: 18px;
+  color: #d9534f;
+}
+
+.disclaimer-box p {
+  font-size: 14px;
+  color: #333;
+}
+
+.disclaimer-box ul {
+  list-style: none;
+  padding: 0;
+}
+
+.disclaimer-box li {
+  font-size: 14px;
+  margin: 5px 0;
+}
+/* Logo Styling */
+.logo {
+  display: block;
+  margin: 0 auto 15px auto;
+  max-width: 350px; /* Adjust as needed */
+  height: auto;
+}
+/* 📊 Stats Section */
+.stats-container {
+  margin-top: 30px;
+  padding: 20px;
+  background: #e8f4ff;
+  border-radius: 12px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.stats-container h3 {
+  font-size: 20px;
+  color: #005eb8;
+  margin-bottom: 15px;
+}
+
+/* 🔹 Stats Grid */
+.stats-grid {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+/* 🔹 Individual Stat Box */
+.stat-box {
+  background: white;
+  padding: 15px 20px;
+  border-radius: 10px;
+  box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  min-width: 120px;
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #005eb8;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #333;
+}
+/* 📩 Cost Savings Example */
+.cost-savings-examples {
+  margin-top: 10px;
+  padding: 15px;
+  background: #f3f7fc;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.cost-savings-examples p {
+  font-weight: bold;
+  color: #005eb8;
+}
+
+.cost-savings-examples ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cost-savings-examples li {
+  font-size: 14px;
+  padding: 5px 0;
+  color: #333;
+}
+/* 🌙 Dark Mode Toggle Button */
+.dark-mode-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #005eb8;
+  color: white;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease;
+}
+
+.dark-mode-toggle:hover {
+  background: #004799;
+}
+
+/* 🌓 Moon Icon */
+.moon-icon {
+  font-size: 16px;
+}
+
+/* 🌙 Dark Mode Styles */
+.dark-mode {
+  background-color: #1e1e1e;
+  color: #ffffff;
+}
+
+.dark-mode .container {
+  background: #2a2a2a;
+  box-shadow: 0px 6px 15px rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode textarea,
+.dark-mode .output-box {
+  background: #333;
+  color: white;
+  border: 1px solid #555;
+}
+
+.dark-mode .stats-container {
+  background: #333;
+  color: white;
+}
+
+.dark-mode .stat-box {
+  background: #444;
+}
+
+.dark-mode .dark-mode-toggle {
+  background: #ffcc00;
+  color: #333;
+}
+
+.dark-mode .dark-mode-toggle:hover {
+  background: #e6b800;
+}
+/* ⚠️ Error Message */
+.error-message {
+  color: #d9534f;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 5px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Smooth Fade-in Effect */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
