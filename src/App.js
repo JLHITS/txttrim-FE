@@ -75,7 +75,7 @@ function App() {
   return (
     <div className="container" ref={containerRef}>
       <img src={logo} alt="TxtTrim Logo" className="logo" />
-      <p className="subtitle">Easily shorten messages for SMS.</p>
+      <p className="subtitle">Powered by AI for smarter, shorter SMS messages.</p>
 
       <textarea
         value={text}
@@ -151,8 +151,8 @@ function App() {
               <li>🔹 The creators accept <strong>no liability</strong> for misuse or unintended consequences.</li>
             </ul>
             <p>
-              If in doubt, consult your organization's <strong>Data Protection Officer (DPO)</strong> or 
-              <strong>Information Governance (IG) team</strong>.
+              If in doubt, consult your organisation's <strong>Data Protection Officer (DPO)</strong> or 
+              <strong> Information Governance (IG) team</strong>.
             </p>
           </div>
         )}

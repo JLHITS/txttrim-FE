@@ -144,6 +144,12 @@ button:hover {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+.output-box ul {
+  list-style: none; /* Removes default bullets */
+  padding: 0;
+  margin: 0;
+}
+
 /* 🔹 Copy Button */
 .copy-btn {
   margin-top: 15px;
@@ -182,6 +188,28 @@ button:hover {
 
 .disclaimer-btn:hover {
   background: #e6b800;
+}
+
+/* 🔹 Fix bullet points issue in Disclaimer & Cost Savings */
+.disclaimer-box ul,
+.cost-savings-examples ul {
+  list-style: none; /* Removes default bullets */
+  padding: 0;
+  margin: 0;
+}
+
+.disclaimer-box li,
+.cost-savings-examples li {
+  font-size: 14px;
+  margin: 5px 0;
+  display: flex;  /* Ensures emoji and text align properly */
+  align-items: center;
+  gap: 6px; /* ✅ Adds space between emoji and text */
+}
+
+/* ✅ Ensures proper spacing between elements */
+.cost-savings-examples li strong {
+  margin-left: 5px;
 }
 
 .disclaimer-box {
