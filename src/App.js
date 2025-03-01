@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./styles.css";
 import logo from "./assets/logo.png"; // Import your logo (place it inside 'src/assets/')
 
@@ -13,6 +13,7 @@ function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [stats, setStats] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const containerRef = useRef(null); // ✅ Reference to scroll the container
 
   // ✅ Fetch usage stats when the app loads
   useEffect(() => {
@@ -50,6 +51,13 @@ function App() {
         .then((updatedStats) => setStats(updatedStats))
         .catch((error) => console.error("Error updating stats:", error));
 
+      // ✅ Scroll back to the top of the app when output appears
+      setTimeout(() => {
+        if (containerRef.current) {
+          containerRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 100);
+
     } catch (error) {
       console.error("Error:", error);
     }
@@ -65,7 +73,7 @@ function App() {
   };
 
   return (
-    <div className="container">
+    <div className="container" ref={containerRef}>
       <img src={logo} alt="TxtTrim Logo" className="logo" />
       <p className="subtitle">Easily shorten messages for SMS.</p>
 
