@@ -2,12 +2,9 @@
 body, html {
   margin: 0;
   padding: 0;
-    overflow-y: auto;
-  min-height: 100vh;
   font-family: 'Inter', sans-serif;
   background: #f9f9f9;
   display: flex;
-    flex-direction: column;
   justify-content: center;
   align-items: center;
   height: 100vh;
@@ -16,13 +13,13 @@ body, html {
 
 /* 🔹 Main Container */
 .container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 100vh;
-  padding-top: 20px; /* Prevents top content from shifting too high */
-  transition: padding 0.3s ease-in-out; /* Smooth transition */
+  max-width: 750px;
+  width: 90%;
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.1);
+  text-align: center;
 }
 
 /* 🔹 Title & Subtitle */
@@ -91,15 +88,11 @@ button:hover {
 
 /* 🔹 Output Section */
 .output-container {
-  width: 100%;
-  max-width: 600px;
-  margin-top: 20px;
-  padding: 15px;
-  border-radius: 8px;
-  background-color: #f8f8f8;
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-  min-height: 100px; /* Ensure space is reserved */
-  transition: all 0.3s ease-in-out; /* Smooth transition */
+  margin-top: 25px;
+  padding: 25px;
+  background: #f3f7fc;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* 🔹 Output Box */
@@ -336,14 +329,7 @@ button:hover {
 .error-message {
   color: #d9534f;
   font-size: 14px;
+  margin-top: 5px;
   font-weight: bold;
   text-align: center;
-  margin-top: 5px;
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-/* Smooth Fade-in Effect */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
