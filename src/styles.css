@@ -8,21 +8,18 @@ body, html {
   justify-content: center;
   align-items: center;
   height: 100vh;
-  overflow: hidden;
   padding: 20px;
 }
 
 /* 🔹 Main Container */
 .container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start; /* Adjusted to avoid pushing the top off-screen */
-  height: 90vh; /* Prevents app from being too big */
-  overflow: auto; /* Allows scrolling if needed */
-  max-width: 95vw; /* Prevents app from being too wide */
-  padding: 20px;
-  box-sizing: border-box;
+  max-width: 750px;
+  width: 90%;
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.1);
+  text-align: center;
 }
 
 /* 🔹 Title & Subtitle */
@@ -35,14 +32,13 @@ h1 {
 .subtitle {
   color: #666;
   font-size: 16px;
-  margin-bottom: 15px;
+  margin-bottom: 25px;
 }
 
 /* 🔹 Textarea */
 textarea {
   width: 100%;
-  max-width: 500px;
-  height: 100px; /* Smaller input size */
+  height: 130px;
   padding: 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -52,20 +48,33 @@ textarea {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* 🔹 Controls */
+/* 🔹 Controls (Dropdown + Button) */
 .controls {
-  margin-top: 10px;
+  margin-top: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 15px;
   align-items: center;
+}
+
+label {
+  font-size: 15px;
+  font-weight: bold;
+  color: #333;
+}
+
+select {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 15px;
 }
 
 /* 🔹 Buttons */
 button {
   background: #005eb8;
   color: white;
-  padding: 10px 16px;
+  padding: 12px 18px;
   border: none;
   border-radius: 8px;
   font-size: 16px;
@@ -79,27 +88,28 @@ button:hover {
 
 /* 🔹 Output Section */
 .output-container {
-  width: 100%;
-  max-width: 500px;
-  min-height: 80px;
-  max-height: 150px; /* Prevents it from taking up too much space */
-  margin-top: 10px;
-  padding: 10px;
-  background-color: #f8f8f8;
-  border-radius: 8px;
-  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
-  overflow-y: auto; /* Allows scrolling inside the box */
+  margin-top: 25px;
+  padding: 25px;
+  background: #f3f7fc;
+  border-radius: 12px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 /* 🔹 Output Box */
+.output-container h2 {
+  font-size: 20px;
+  color: #005eb8;
+  margin-bottom: 12px;
+}
+
 .output-box {
   background: white;
-  padding: 14px;
+  padding: 18px;
   border: 1px solid #ddd;
   border-radius: 8px;
   font-size: 16px;
   text-align: left;
-  min-height: 60px;
+  min-height: 80px;
   cursor: text;
   word-wrap: break-word;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -107,9 +117,9 @@ button:hover {
 
 /* 🔹 Copy Button */
 .copy-btn {
-  margin-top: 10px;
+  margin-top: 15px;
   background: #007f5f;
-  padding: 10px;
+  padding: 12px;
 }
 
 .copy-btn:hover {
@@ -117,15 +127,84 @@ button:hover {
 }
 
 /* 🔹 Stats Section */
+.stats {
+  font-size: 15px;
+  color: #444;
+  margin-top: 12px;
+  text-align: left;
+}
+
+/* 🔹 Disclaimer Section */
+.disclaimer-container {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.disclaimer-btn {
+  background: #ffcc00;
+  color: #333;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.disclaimer-btn:hover {
+  background: #e6b800;
+}
+
+.disclaimer-box {
+  margin-top: 15px;
+  background: #fff7cc;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+  text-align: left;
+  font-size: 14px;
+}
+
+.disclaimer-box h3 {
+  font-size: 18px;
+  color: #d9534f;
+}
+
+.disclaimer-box p {
+  font-size: 14px;
+  color: #333;
+}
+
+.disclaimer-box ul {
+  list-style: none;
+  padding: 0;
+}
+
+.disclaimer-box li {
+  font-size: 14px;
+  margin: 5px 0;
+}
+/* Logo Styling */
+.logo {
+  display: block;
+  margin: 0 auto 15px auto;
+  max-width: 350px; /* Adjust as needed */
+  height: auto;
+}
+/* 📊 Stats Section */
 .stats-container {
-  margin-top: 10px;
-  padding: 10px;
+  margin-top: 30px;
+  padding: 20px;
   background: #e8f4ff;
   border-radius: 12px;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
   text-align: center;
-  max-height: 130px; /* Ensures stats don’t push content too far */
-  overflow-y: auto;
+}
+
+.stats-container h3 {
+  font-size: 20px;
+  color: #005eb8;
+  margin-bottom: 15px;
 }
 
 /* 🔹 Stats Grid */
@@ -133,56 +212,85 @@ button:hover {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  gap: 10px;
+  gap: 15px;
   flex-wrap: wrap;
 }
 
 /* 🔹 Individual Stat Box */
 .stat-box {
   background: white;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 15px 20px;
+  border-radius: 10px;
   box-shadow: 0px 3px 6px rgba(0, 0, 0, 0.1);
   text-align: center;
-  min-width: 100px;
+  min-width: 120px;
   flex: 1;
 }
 
-/* 🔹 Cost Savings Example */
+.stat-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #005eb8;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #333;
+}
+/* 📩 Cost Savings Example */
 .cost-savings-examples {
-  margin-top: 8px;
-  padding: 10px;
+  margin-top: 10px;
+  padding: 15px;
   background: #f3f7fc;
   border-radius: 8px;
   text-align: left;
   font-size: 14px;
 }
 
-/* 🔹 Disclaimer Section */
-.disclaimer-container {
-  margin-top: 15px;
-  text-align: center;
+.cost-savings-examples p {
+  font-weight: bold;
+  color: #005eb8;
 }
 
-.disclaimer-box {
-  margin-top: 10px;
-  background: #fff7cc;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
-  text-align: left;
+.cost-savings-examples ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.cost-savings-examples li {
   font-size: 14px;
+  padding: 5px 0;
+  color: #333;
+}
+/* 🌙 Dark Mode Toggle Button */
+.dark-mode-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: #005eb8;
+  color: white;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease;
 }
 
-/* 🔹 Logo Styling */
-.logo {
-  display: block;
-  margin: 0 auto 10px auto;
-  max-width: 300px;
-  height: auto;
+.dark-mode-toggle:hover {
+  background: #004799;
 }
 
-/* 🔹 Dark Mode */
+/* 🌓 Moon Icon */
+.moon-icon {
+  font-size: 16px;
+}
+
+/* 🌙 Dark Mode Styles */
 .dark-mode {
   background-color: #1e1e1e;
   color: #ffffff;
@@ -209,7 +317,15 @@ button:hover {
   background: #444;
 }
 
-/* 🔹 Error Message */
+.dark-mode .dark-mode-toggle {
+  background: #ffcc00;
+  color: #333;
+}
+
+.dark-mode .dark-mode-toggle:hover {
+  background: #e6b800;
+}
+/* ⚠️ Error Message */
 .error-message {
   color: #d9534f;
   font-size: 14px;
