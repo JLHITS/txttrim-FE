@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import "./styles.css";
 import logo from "./assets/logo.png"; // Import your logo (place it inside 'src/assets/')
 
@@ -13,7 +13,6 @@ function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [stats, setStats] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const containerRef = useRef(null); // ✅ Reference to scroll the container
 
   // ✅ Fetch usage stats when the app loads
   useEffect(() => {
@@ -50,14 +49,6 @@ function App() {
         .then((res) => res.json())
         .then((updatedStats) => setStats(updatedStats))
         .catch((error) => console.error("Error updating stats:", error));
-
-      // ✅ Scroll back to the top of the app when output appears
-      setTimeout(() => {
-        if (containerRef.current) {
-          containerRef.current.scrollIntoView({ behavior: "smooth" });
-        }
-      }, 100);
-
     } catch (error) {
       console.error("Error:", error);
     }
@@ -73,9 +64,9 @@ function App() {
   };
 
   return (
-    <div className="container" ref={containerRef}>
+    <div className="container">
       <img src={logo} alt="TxtTrim Logo" className="logo" />
-      <p className="subtitle">Powered by AI for smarter, shorter SMS messages.</p>
+      <p className="subtitle">Easily shorten messages for SMS.</p>
 
       <textarea
         value={text}
@@ -116,19 +107,7 @@ function App() {
           <p className="stats">
             <strong>Original Length:</strong> {response.original_length} characters<br />
             <strong>Shortened Length:</strong> {response.shortened_length} characters<br />
-            <strong>Cost Saving per SMS sent:</strong> £{response.cost_savings}
           </p>
-
-          {/* Cost Saving Examples */}
-          <div className="cost-savings-examples">
-            <p>💡 Example Savings:</p>
-            <ul>
-              <li>📩 500 messages = <strong>£{(500 * response.cost_savings).toFixed(2)}</strong> saved</li>
-              <li>📩 1,000 messages = <strong>£{(1000 * response.cost_savings).toFixed(2)}</strong> saved</li>
-              <li>📩 5,000 messages = <strong>£{(5000 * response.cost_savings).toFixed(2)}</strong> saved</li>
-              <li>📩 10,000 messages = <strong>£{(10000 * response.cost_savings).toFixed(2)}</strong> saved</li>
-            </ul>
-          </div>
         </div>
       )}
 
@@ -143,16 +122,6 @@ function App() {
             <p>
               This SMS Shortener tool is provided for convenience and informational purposes only. 
               <strong> Do not enter confidential or personally identifiable information</strong> 
-            </p>
-            <ul>
-              <li>🔹 <strong>No data is stored</strong>—all processing happens in real-time.</li>
-              <li>🔹 The tool does not guarantee accuracy or suitability for communication.</li>
-              <li>🔹 You are responsible for ensuring messages comply with GDPR policies.</li>
-              <li>🔹 The creators accept <strong>no liability</strong> for misuse or unintended consequences.</li>
-            </ul>
-            <p>
-              If in doubt, consult your organisation's <strong>Data Protection Officer (DPO)</strong> or 
-              <strong> Information Governance (IG) team</strong>.
             </p>
           </div>
         )}
@@ -173,7 +142,7 @@ function App() {
             </div>
             <div className="stat-box">
               <p className="stat-value">£{stats.total_cost_saved.toFixed(2)}</p>
-              <p className="stat-label">Total Saved Per SMS Sent</p>
+              <p className="stat-label">Total Savings</p>
             </div>
           </div>
         ) : (
