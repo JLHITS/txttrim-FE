@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactGA from "react-ga4"; // ✅ Import Google Analytics
 import "./styles.css";
 import logo from "./assets/logo.png"; // Import your logo (place it inside 'src/assets/')
 
-const API_BASE_URL = "https://txttrim-backend.onrender.com"; // ✅ Set your backend API base URL
+const API_BASE_URL = "https://txttrim-backend.onrender.com";
+const TRACKING_ID = "G-KKM0XZD821";
 
 function App() {
   const [text, setText] = useState("");
@@ -13,7 +15,13 @@ function App() {
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [stats, setStats] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const containerRef = useRef(null); // ✅ Reference to scroll the container
+  const containerRef = useRef(null); // Reference to scroll the container
+
+  // ✅ Initialize Google Analytics
+  useEffect(() => {
+    ReactGA.initialize(TRACKING_ID);
+    ReactGA.send("pageview");
+  }, []);
 
   // ✅ Fetch usage stats when the app loads
   useEffect(() => {
@@ -29,9 +37,16 @@ function App() {
       return;
     }
 
-    setErrorMessage(""); // ✅ Clear error if input is valid
+    setErrorMessage("");
     setLoading(true);
     setCopied(false);
+
+    // ✅ Google Analytics Event: User clicked "Shorten SMS"
+    ReactGA.event({
+      category: "User",
+      action: "Clicked Shorten SMS",
+      label: "Shortened an SMS",
+    });
 
     try {
       const res = await fetch(`${API_BASE_URL}/shorten`, {
@@ -57,7 +72,6 @@ function App() {
           containerRef.current.scrollIntoView({ behavior: "smooth" });
         }
       }, 100);
-
     } catch (error) {
       console.error("Error:", error);
     }
@@ -68,6 +82,14 @@ function App() {
     if (response && response.shortened_text) {
       navigator.clipboard.writeText(response.shortened_text);
       setCopied(true);
+
+      // ✅ Google Analytics Event: User copied text
+      ReactGA.event({
+        category: "User",
+        action: "Copied SMS",
+        label: "Copied shortened SMS to clipboard",
+      });
+
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -81,8 +103,16 @@ function App() {
         value={text}
         onChange={(e) => {
           setText(e.target.value);
+
+          // ✅ Google Analytics Event: User is typing
+          ReactGA.event({
+            category: "User",
+            action: "Typing Message",
+            label: "User is entering an SMS",
+          });
+
           if (e.target.value.trim() !== "") {
-            setErrorMessage(""); // ✅ Clear error when user starts typing
+            setErrorMessage("");
           }
         }}
         placeholder="Enter the message..."
@@ -93,7 +123,19 @@ function App() {
 
       <div className="controls">
         <label>Max SMS Fragments:</label>
-        <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))}>
+        <select
+          value={maxChars}
+          onChange={(e) => {
+            setMaxChars(Number(e.target.value));
+
+            // ✅ Google Analytics Event: User changed max SMS fragments
+            ReactGA.event({
+              category: "User",
+              action: "Changed Max SMS Fragments",
+              label: `Set to ${e.target.value} characters`,
+            });
+          }}
+        >
           <option value={160}>1 SMS (160 chars)</option>
           <option value={320}>2 SMS (320 chars)</option>
           <option value={480}>3 SMS (480 chars)</option>
@@ -118,31 +160,32 @@ function App() {
             <strong>Shortened Length:</strong> {response.shortened_length} characters<br />
             <strong>Cost Saving per SMS sent:</strong> £{response.cost_savings}
           </p>
-
-          {/* Cost Saving Examples */}
-          <div className="cost-savings-examples">
-            <p>💡 Example Savings:</p>
-            <ul>
-              <li>📩 500 messages = <strong>£{(500 * response.cost_savings).toFixed(2)}</strong> saved</li>
-              <li>📩 1,000 messages = <strong>£{(1000 * response.cost_savings).toFixed(2)}</strong> saved</li>
-              <li>📩 5,000 messages = <strong>£{(5000 * response.cost_savings).toFixed(2)}</strong> saved</li>
-              <li>📩 10,000 messages = <strong>£{(10000 * response.cost_savings).toFixed(2)}</strong> saved</li>
-            </ul>
-          </div>
         </div>
       )}
 
       {/* Collapsible Disclaimer Box */}
       <div className="disclaimer-container">
-        <button className="disclaimer-btn" onClick={() => setShowDisclaimer(!showDisclaimer)}>
+        <button
+          className="disclaimer-btn"
+          onClick={() => {
+            setShowDisclaimer(!showDisclaimer);
+
+            // ✅ Google Analytics Event: User opened/closed disclaimer
+            ReactGA.event({
+              category: "User",
+              action: showDisclaimer ? "Closed Disclaimer" : "Opened Disclaimer",
+              label: "User toggled disclaimer",
+            });
+          }}
+        >
           {showDisclaimer ? "Hide Disclaimer" : "Show Disclaimer"}
         </button>
         {showDisclaimer && (
           <div className="disclaimer-box">
             <h3>🚨 Disclaimer: Use at Your Own Risk</h3>
             <p>
-              This SMS Shortener tool is provided for convenience and informational purposes only. 
-              <strong> Do not enter confidential or personally identifiable information</strong> 
+              This SMS Shortener tool is provided for convenience and informational purposes only.
+              <strong> Do not enter confidential or personally identifiable information.</strong>
             </p>
             <ul>
               <li>🔹 <strong>No data is stored</strong>—all processing happens in real-time.</li>
@@ -151,14 +194,14 @@ function App() {
               <li>🔹 The creators accept <strong>no liability</strong> for misuse or unintended consequences.</li>
             </ul>
             <p>
-              If in doubt, consult your organisation's <strong>Data Protection Officer (DPO)</strong> or 
+              If in doubt, consult your organisation's <strong>Data Protection Officer (DPO)</strong> or
               <strong> Information Governance (IG) team</strong>.
             </p>
           </div>
         )}
       </div>
 
-      {/* Stats Section (Sleek Card Layout) */}
+      {/* Stats Section */}
       <div className="stats-container">
         <h3>📊 TxtTrim Usage Statistics</h3>
         {stats ? (
