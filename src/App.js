@@ -16,6 +16,8 @@ function App() {
   const [stats, setStats] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const containerRef = useRef(null); // Reference to scroll the container
+  const [charCount, setCharCount] = useState(0);
+
 
   // ✅ Initialize Google Analytics
   useEffect(() => {
@@ -102,21 +104,29 @@ function App() {
       <textarea
         value={text}
         onChange={(e) => {
-          setText(e.target.value);
+		  const newText = e.target.value;
+		  setText(newText);
+		  setCharCount(newText.length); // ✅ Update character count
 
-          // ✅ Google Analytics Event: User is typing
-          ReactGA.event({
-            category: "User",
-            action: "Typing Message",
-            label: "User is entering an SMS",
-          });
+		  // ✅ Google Analytics Event: User is typing
+		  ReactGA.event({
+			category: "User",
+			action: "Typing Message",
+			label: "User is entering an SMS",
+		  });
 
-          if (e.target.value.trim() !== "") {
-            setErrorMessage("");
-          }
-        }}
+		  if (newText.trim() !== "") {
+			setErrorMessage("");
+		  }
+		}}
+
         placeholder="Enter the message..."
       />
+	  
+	 <p className="char-count">
+		Characters: {charCount} / {maxChars}
+	</p>
+
 
       {/* ✅ Display error message if input is empty */}
       {errorMessage && <p className="error-message">{errorMessage}</p>}
@@ -160,7 +170,19 @@ function App() {
             <strong>Shortened Length:</strong> {response.shortened_length} characters<br />
             <strong>Cost Saving per SMS sent:</strong> £{response.cost_savings}
           </p>
-        </div>
+
+		
+				{/* Cost Saving Examples */}
+			<div className="cost-savings-examples">
+			  <p>💡 Example Savings:</p>
+			  <ul>
+				<li>📩 500 messages = <strong>£{(500 * response.cost_savings).toFixed(2)}</strong> saved</li>
+				<li>📩 1,000 messages = <strong>£{(1000 * response.cost_savings).toFixed(2)}</strong> saved</li>
+				<li>📩 5,000 messages = <strong>£{(5000 * response.cost_savings).toFixed(2)}</strong> saved</li>
+				<li>📩 10,000 messages = <strong>£{(10000 * response.cost_savings).toFixed(2)}</strong> saved</li>
+			  </ul>
+			</div>
+       </div>
       )}
 
       {/* Collapsible Disclaimer Box */}

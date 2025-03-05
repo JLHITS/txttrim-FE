@@ -291,6 +291,15 @@ button:hover {
   margin-top: 5px;
 }
 
+/*  Live Character Counter */
+.char-count {
+  font-size: 14px;
+  color: #666;
+  text-align: right;
+  margin-top: 5px;
+}
+
+
 /* Smooth Fade-in Effect */
 @keyframes fadeIn {
   from { opacity: 0; }
