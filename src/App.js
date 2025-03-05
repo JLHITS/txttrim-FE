@@ -17,6 +17,8 @@ function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const containerRef = useRef(null); // Reference to scroll the container
   const [charCount, setCharCount] = useState(0);
+  const [showAbout, setShowAbout] = useState(false);
+
 
 
   // ✅ Initialize Google Analytics
@@ -222,6 +224,39 @@ function App() {
           </div>
         )}
       </div>
+	  
+			  {/* Collapsible About Section */}
+		<div className="about-container">
+		  <button
+			className="about-btn"
+			onClick={() => setShowAbout(!showAbout)}
+		  >
+			{showAbout ? "Hide About" : "Show About"}
+		  </button>
+		  {showAbout && (
+			<div className="about-box">
+			  <h3>ℹ️ About TxtTrim</h3>
+			  <p>
+				TxtTrim is a free AI-powered SMS shortener designed to optimise SMS messages
+				whilst preserving clarity and meaning. It was developed to help businesses
+				save costs on SMS communication.
+			  </p>
+			  <p>
+				TxtTrim is <strong>fully open-source</strong>. You can explore and contribute
+				to the project:
+			  </p>
+			  <ul>
+				<li>🔹 <a href="https://github.com/JLHITS/txttrim-FE" target="_blank" rel="noopener noreferrer">Frontend GitHub Repository</a></li>
+				<li>🔹 <a href="https://github.com/JLHITS/txttrim" target="_blank" rel="noopener noreferrer">Backend GitHub Repository</a></li>
+			  </ul>
+			  <p>
+				For feedback, questions, or contributions, email me at
+				<strong> <a href="mailto:lhits@lhits.co.uk">lhits@lhits.co.uk</a></strong>.
+			  </p>
+			</div>
+		  )}
+		</div>
+
 
       {/* Stats Section */}
       <div className="stats-container">
