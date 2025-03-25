@@ -19,7 +19,7 @@ function App() {
   const [charCount, setCharCount] = useState(0);
   const [showAbout, setShowAbout] = useState(false);
   const [shortenUrls, setShortenUrls] = useState(true);
-
+  const [businessSector, setBusinessSector] = useState("General");
 
 
 
@@ -36,6 +36,14 @@ function App() {
       .then((data) => setStats(data))
       .catch((error) => console.error("Error fetching stats:", error));
   }, []);
+  
+  useEffect(() => { // For local storage of settings for drop down boxes
+  const storedSector = localStorage.getItem("preferredSector");
+  const storedMaxChars = localStorage.getItem("preferredMaxChars");
+
+  if (storedSector) setBusinessSector(storedSector);
+  if (storedMaxChars) setMaxChars(Number(storedMaxChars));
+}, []);
 
   const handleShorten = async () => {
     if (!text.trim()) {
@@ -60,7 +68,12 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text, max_chars: maxChars, shorten_urls: shortenUrls }),
+        body: JSON.stringify({ 
+		  text, 
+		  max_chars: maxChars, 
+		  shorten_urls: shortenUrls,
+		  business_sector: businessSector 
+		}),
       });
 
       const data = await res.json();
@@ -135,31 +148,61 @@ function App() {
       {/* ✅ Display error message if input is empty */}
       {errorMessage && <p className="error-message">{errorMessage}</p>}
 
-      <div className="controls">
-        <label>Max SMS Fragments:</label>
-        <select
-          value={maxChars}
-          onChange={(e) => {
-            setMaxChars(Number(e.target.value));
+			  <div className="controls">
+		  <div className="control-group">
+			<label>Max SMS Fragments:</label>
+			<select
+			  value={maxChars}
+				onChange={(e) => {
+				  const value = Number(e.target.value);
+				  setMaxChars(value);
+				  localStorage.setItem("preferredMaxChars", value);
 
-            // ✅ Google Analytics Event: User changed max SMS fragments
-            ReactGA.event({
-              category: "User",
-              action: "Changed Max SMS Fragments",
-              label: `Set to ${e.target.value} characters`,
-            });
-          }}
-        >
-			
-          <option value={160}>1 SMS (160 chars)</option>
-          <option value={320}>2 SMS (320 chars)</option>
-          <option value={480}>3 SMS (480 chars)</option>
-        </select>
-        <button onClick={handleShorten} disabled={loading || !text.trim()}>
-          {loading ? "Shortening..." : "Shorten SMS"}
-        </button>
-      </div>
-	  <div className="checkbox-container">
+				  ReactGA.event({
+					category: "User",
+					action: "Changed Max SMS Fragments",
+					label: `Set to ${e.target.value} characters`,
+				  });
+				}}
+
+			>
+			  <option value={160}>1 SMS (160 chars)</option>
+			  <option value={320}>2 SMS (320 chars)</option>
+			  <option value={480}>3 SMS (480 chars)</option>
+			</select>
+		  </div>
+
+		  <div className="control-group">
+			<label>Business Sector:</label>
+			<select
+			  value={businessSector}
+			  onChange={(e) => {
+				  const value = e.target.value;
+				  setBusinessSector(value);
+				  localStorage.setItem("preferredSector", value);
+
+				  ReactGA.event({
+					category: "User",
+					action: "Changed Business Sector",
+					label: value,
+				  });
+				}}
+			>
+			  <option value="General">General</option>
+			  <option value="Healthcare">Healthcare</option>
+			  <option value="Retail">Retail</option>
+			  <option value="Finance">Finance</option>
+			  <option value="Education">Education</option>
+			  <option value="Legal">Legal</option>
+			</select>
+		  </div>
+
+		  <button onClick={handleShorten} disabled={loading || !text.trim()}>
+			{loading ? "Shortening..." : "Shorten SMS"}
+		  </button>
+		</div>
+
+		<div className="checkbox-container">
 			  <label>
 				<input
 				  type="checkbox"
@@ -168,7 +211,7 @@ function App() {
 				/>
 				Shorten URLs?
 			  </label>
-			</div>
+		</div>
 
       {response && (
         <div className="output-container">
@@ -254,6 +297,18 @@ function App() {
 				whilst preserving clarity and meaning. It was developed to help businesses
 				save costs on SMS communication.
 			  </p>
+
+			  <p>
+				You can choose a Business Sector before shortening a message. This tells the AI to adjust the tone and phrasing based on the sector’s communication style. For example:
+			  </p>
+			  <ul>
+				<li>🏥 <strong>Healthcare</strong>: Empathetic, professional, patient-friendly</li>
+				<li>🛍️ <strong>Retail</strong>: Friendly, upbeat, promotional</li>
+				<li>💼 <strong>Finance</strong>: Clear, trustworthy, regulation-aware</li>
+				<li>🎓 <strong>Education</strong>: Supportive, informative, encouraging</li>
+				<li>⚖️ <strong>Legal</strong>: Formal, precise, careful with language</li>
+				<li>🌐 <strong>General</strong>: Neutral and universal tone for any audience</li>
+			  </ul>
 			  <p>
 				TxtTrim is <strong>fully open-source</strong>. You can explore and contribute
 				to the project:
