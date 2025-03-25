@@ -18,6 +18,8 @@ function App() {
   const containerRef = useRef(null); // Reference to scroll the container
   const [charCount, setCharCount] = useState(0);
   const [showAbout, setShowAbout] = useState(false);
+  const [shortenUrls, setShortenUrls] = useState(true);
+
 
 
 
@@ -58,7 +60,7 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text, max_chars: maxChars }),
+        body: JSON.stringify({ text, max_chars: maxChars, shorten_urls: shortenUrls }),
       });
 
       const data = await res.json();
@@ -148,6 +150,7 @@ function App() {
             });
           }}
         >
+			
           <option value={160}>1 SMS (160 chars)</option>
           <option value={320}>2 SMS (320 chars)</option>
           <option value={480}>3 SMS (480 chars)</option>
@@ -156,6 +159,16 @@ function App() {
           {loading ? "Shortening..." : "Shorten SMS"}
         </button>
       </div>
+	  <div className="checkbox-container">
+			  <label>
+				<input
+				  type="checkbox"
+				  checked={shortenUrls}
+				  onChange={() => setShortenUrls(!shortenUrls)}
+				/>
+				Shorten URLs?
+			  </label>
+			</div>
 
       {response && (
         <div className="output-container">
