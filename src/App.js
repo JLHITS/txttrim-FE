@@ -271,28 +271,31 @@ function App() {
 		</div>
 
 
-      {/* Stats Section */}
-      <div className="stats-container">
-        <h3>📊 TxtTrim Usage Statistics</h3>
-        {stats ? (
-          <div className="stats-grid">
-            <div className="stat-box">
-              <p className="stat-value">{stats.total_sms_shortened}</p>
-              <p className="stat-label">Total SMS Trimmed</p>
-            </div>
-            <div className="stat-box">
-              <p className="stat-value">{stats.total_characters_saved}</p>
-              <p className="stat-label">Total Characters Trimmed</p>
-            </div>
-            <div className="stat-box">
-              <p className="stat-value">£{stats.total_cost_saved.toFixed(2)}</p>
-              <p className="stat-label">Total Saved Per SMS Sent</p>
-            </div>
-          </div>
-        ) : (
-          <p>Loading stats...</p>
-        )}
+{/*
+  <div className="stats-container">
+    <h3>📊 TxtTrim Usage Statistics</h3>
+    {stats ? (
+      <div className="stats-grid">
+        <div className="stat-box">
+          <p className="stat-value">{stats.total_sms_shortened}</p>
+          <p className="stat-label">Total SMS Trimmed</p>
+        </div>
+        <div className="stat-box">
+          <p className="stat-value">{stats.total_characters_saved}</p>
+          <p className="stat-label">Total Characters Trimmed</p>
+        </div>
+        <div className="stat-box">
+          <p className="stat-value">£{stats.total_cost_saved.toFixed(2)}</p>
+          <p className="stat-label">Total Saved Per SMS Sent</p>
+        </div>
       </div>
+    ) : (
+      <p>Loading stats...</p>
+    )}
+  </div>
+*/}
+
+
     </div>
   );
 }
