@@ -217,7 +217,7 @@ function App() {
         <div className="output-container">
           <h2>Shortened Message</h2>
           <div className="output-box">
-            <p>{response.shortened_text}</p>
+            <div className="output-text">{response.shortened_text}</div>
           </div>
           <button className="copy-btn" onClick={handleCopy}>
             {copied ? "Copied!" : "Copy to Clipboard"}

@@ -41,6 +41,11 @@
   gap: 10px;
 }
 
+.output-text {
+  white-space: pre-wrap;
+  font-family: inherit;
+  line-height: 1.4;
+}
 
 @keyframes App-logo-spin {
   from {
@@ -50,3 +55,4 @@
     transform: rotate(360deg);
   }
 }
+
