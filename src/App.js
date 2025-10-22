@@ -212,6 +212,19 @@ function App() {
 				Shorten URLs?
 			  </label>
 		</div>
+		
+		<div className="api-info-text" style={{ fontSize: "0.9em", color: "#666", marginTop: "4px" }}>
+			TxtTrim uses <strong>is.gd</strong> API to shorten URLs.{" "}
+		<a
+			href="https://is.gd/apishorteningreference.php"
+			target="_blank"
+			rel="noopener noreferrer"
+			style={{ color: "#007bff", textDecoration: "underline" }}
+		  >
+			Learn more.
+		  </a>
+		</div>
+
 
       {response && (
         <div className="output-container">
