@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ReactGA from "react-ga4";
-import QRCode from "react-qr-code"; // <--- NEW IMPORT
+import QRCode from "react-qr-code"; 
 
 // --- ASSETS ---
 import logo from "./assets/logo.png"; 
@@ -64,6 +64,9 @@ function App() {
   const [shortenUrls, setShortenUrls] = useState(true);
   const [protectVariables, setProtectVariables] = useState(true);
   
+  // New Slider State
+  const [patientCount, setPatientCount] = useState(5000);
+  
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -74,7 +77,7 @@ function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showQR, setShowQR] = useState(false); // <--- NEW STATE
+  const [showQR, setShowQR] = useState(false);
   const [history, setHistory] = useState([]);
 
   // --- EFFECTS ---
@@ -233,14 +236,38 @@ function App() {
         <p className="text-sm text-amber-900 dark:text-amber-300 mb-4">
           You saved <strong>{savedFrags} SMS fragments</strong> per patient!
         </p>
-        <div className="space-y-2">
-           <div className="flex justify-between items-center text-sm border-b border-amber-100 dark:border-amber-800 pb-1">
+        
+        <div className="space-y-4">
+           {/* Per Message Line */}
+           <div className="flex justify-between items-center text-sm border-b border-amber-100 dark:border-amber-800 pb-2">
               <span className="text-amber-700 dark:text-amber-400">Single Message</span>
               <span className="font-bold text-amber-900 dark:text-amber-200">£{savedPerMsg.toFixed(3)}</span>
            </div>
-           <div className="flex justify-between items-center text-sm font-medium pt-1">
-              <span className="text-amber-700 dark:text-amber-400">List of 1,000 Patients</span>
-              <span className="font-bold text-green-700 dark:text-green-400">£{(savedPerMsg * 1000).toFixed(2)}</span>
+
+           {/* Interactive Slider Section */}
+           <div className="pt-1">
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                  List Size: {patientCount.toLocaleString()} patients
+                </label>
+                <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                  £{(savedPerMsg * patientCount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="1" 
+                max="100000" 
+                step="100"
+                value={patientCount} 
+                onChange={(e) => setPatientCount(Number(e.target.value))}
+                className="w-full h-2 bg-amber-200 dark:bg-amber-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+              />
+              <div className="flex justify-between text-[10px] text-amber-500 dark:text-amber-500 mt-1">
+                <span>1</span>
+                <span>50k</span>
+                <span>100k</span>
+              </div>
            </div>
         </div>
       </div>
