@@ -174,7 +174,6 @@ function App() {
   };
   const refinePolite = () => handleShorten({ business_sector: "Healthcare" });
   const refineFormal = () => handleShorten({ business_sector: "Legal" });
-  // NEW: Simplify Reading Age handler
   const refineSimple = () => handleShorten({ business_sector: "Plain English (Simple)" });
 
   const handleCopy = () => {
@@ -203,13 +202,12 @@ function App() {
           <span className="opacity-75 font-normal">({analysis.label})</span>
         </div>
         
-        {/* SHOW SIMPLIFY BUTTON IF AGE > 10 */}
         {analysis.score > 10 && (
           <button 
             onClick={refineSimple}
             className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition flex items-center gap-1"
           >
-            <span>📉</span>Try to Simplify
+            <span>📉</span> Simplify
           </button>
         )}
       </div>
@@ -251,31 +249,45 @@ function App() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans selection:bg-blue-100 dark:selection:bg-blue-900 transition-colors duration-300">
       
       {/* --- HEADER --- */}
-      <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-3 shadow-sm sticky top-0 z-20 transition-colors">
+      <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 shadow-sm sticky top-0 z-20 transition-colors">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
           
-          {/* LEFT: LOGO */}
-          <div className="flex items-center gap-3">
+          {/* LEFT: LOGO & HEADER */}
+          <div className="flex items-center gap-5">
             <img 
               src={darkMode ? logoInv : logo} 
               alt="TxtTrim" 
-              className="h-12 w-auto object-contain" 
+              className="h-16 w-16 object-contain" // Increased Logo Size
             />
-            <div className="flex flex-col justify-center h-full">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">AI SMS Optimiser</p>
+            <div className="flex flex-col">
+              <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">TxtTrim</h1>
+              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">AI SMS Optimiser</p>
             </div>
           </div>
 
           {/* RIGHT: CREDITS & ACTIONS */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 mt-4 md:mt-0">
             <button onClick={() => setShowHistory(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition text-slate-600 dark:text-slate-200" title="History"><span className="text-lg">📜</span></button>
             <button onClick={() => setDarkMode(!darkMode)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition" title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>{darkMode ? "☀️" : "🌙"}</button>
             <button onClick={() => setShowAbout(!showAbout)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition" title="About TxtTrim"><span className="text-lg">ℹ️</span></button>
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
-            <div className="hidden sm:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
+            {/* 4. MADE IN BADGE (Far Right) */}
+            <div className="hidden sm:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
-                <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer"><img src={rushcliffeLogo} alt="Rushcliffe PCN" className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" /></a>
-                <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer"><img src={nottsWestLogo} alt="Nottingham West PCN" className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" /></a>
+                <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
+                  <img 
+                    src={rushcliffeLogo} 
+                    alt="Rushcliffe PCN" 
+                    className="h-9 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" 
+                  />
+                </a>
+                <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer">
+                  <img 
+                    src={nottsWestLogo} 
+                    alt="Nottingham West PCN" 
+                    className="h-9 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" 
+                  />
+                </a>
             </div>
           </div>
         </div>
