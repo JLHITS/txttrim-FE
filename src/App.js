@@ -13,7 +13,6 @@ const API_BASE_URL = "https://txttrim-backend.onrender.com";
 const TRACKING_ID = "G-KKM0XZD821";
 const COST_PER_FRAGMENT = 0.022; 
 
-// --- TEMPLATES DATA ---
 const TEMPLATES = {
   "none": "",
   "flu_invite": "Dear Patient, this is a message from the surgery. We are writing to invite you to book your seasonal flu vaccination. We have clinics running this Saturday. Please book your appointment online by clicking this link: https://www.nhs.uk/conditions/vaccinations/flu-influenza-vaccine/",
@@ -22,7 +21,6 @@ const TEMPLATES = {
   "dna_warning": "Dear Patient, our records show you missed your appointment today. Please be aware that missed appointments cost the NHS time and money. If you cannot attend in future, please cancel in advance."
 };
 
-// --- HELPERS: Reading Age Calculator (Flesch-Kincaid) ---
 const countSyllables = (word) => {
   word = word.toLowerCase();
   if (word.length <= 3) return 1;
@@ -34,22 +32,17 @@ const countSyllables = (word) => {
 
 const calculateReadingAge = (text) => {
   if (!text.trim()) return null;
-  
   const cleanText = text.replace(/[^\w\s.?!]/g, "");
   const words = cleanText.split(/\s+/).filter(w => w.length > 0);
   const sentences = cleanText.split(/[.?!]+/).filter(s => s.trim().length > 0);
-  
   if (words.length === 0 || sentences.length === 0) return null;
-
   const totalWords = words.length;
   const totalSentences = sentences.length;
   const totalSyllables = words.reduce((acc, word) => acc + countSyllables(word), 0);
-
   const asl = totalWords / totalSentences;
   const asw = totalSyllables / totalWords;
   const grade = (0.39 * asl) + (11.8 * asw) - 15.59;
   const age = Math.round(grade + 5);
-  
   if (age < 6) return { score: age, label: "Very Simple", color: "text-green-600 bg-green-50 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800" };
   if (age <= 11) return { score: age, label: "Perfect (NHS Standard)", color: "text-green-700 bg-green-100 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700" };
   if (age <= 14) return { score: age, label: "Moderate", color: "text-yellow-700 bg-yellow-100 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700" };
@@ -57,22 +50,22 @@ const calculateReadingAge = (text) => {
 };
 
 function App() {
-  // --- STATE ---
   const [text, setText] = useState("");
   const [maxChars, setMaxChars] = useState(160);
   const [businessSector, setBusinessSector] = useState("General");
   const [shortenUrls, setShortenUrls] = useState(true);
   const [protectVariables, setProtectVariables] = useState(true);
   
-  // New Slider State
+  // NEW STATES
   const [patientCount, setPatientCount] = useState(5000);
-  
+  const [signature, setSignature] = useState(""); 
+  const [targetLanguage, setTargetLanguage] = useState("English");
+
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   
-  // UI Toggles
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -80,18 +73,18 @@ function App() {
   const [showQR, setShowQR] = useState(false);
   const [history, setHistory] = useState([]);
 
-  // --- EFFECTS ---
   useEffect(() => {
     ReactGA.initialize(TRACKING_ID);
     ReactGA.send("pageview");
-    
     const storedSector = localStorage.getItem("preferredSector");
     const storedMaxChars = localStorage.getItem("preferredMaxChars");
     const storedHistory = JSON.parse(localStorage.getItem("txttrim_history") || "[]");
+    const storedSig = localStorage.getItem("txttrim_signature");
     
     if (storedSector) setBusinessSector(storedSector);
     if (storedMaxChars) setMaxChars(Number(storedMaxChars));
     if (storedHistory) setHistory(storedHistory);
+    if (storedSig) setSignature(storedSig);
 
     if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
       setDarkMode(true);
@@ -99,14 +92,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
-  // --- ACTIONS ---
   const addToHistory = (newItem) => {
     const updated = [newItem, ...history].slice(0, 10);
     setHistory(updated);
@@ -123,6 +112,7 @@ function App() {
     const txtToUse = overrideParams.text || text;
     const charsToUse = overrideParams.max_chars || maxChars;
     const sectorToUse = overrideParams.business_sector || businessSector;
+    const langToUse = overrideParams.target_language || targetLanguage;
 
     if (!txtToUse.trim()) {
       setErrorMessage("⚠️ Please enter a message first.");
@@ -135,8 +125,13 @@ function App() {
 
     if (overrideParams.max_chars) setMaxChars(overrideParams.max_chars);
     if (overrideParams.business_sector) setBusinessSector(overrideParams.business_sector);
+    if (overrideParams.target_language) setTargetLanguage(overrideParams.target_language);
 
     ReactGA.event({ category: "User", action: "Clicked Shorten", label: "Shorten Attempt" });
+
+    // Calculate available chars for AI (Total limit - Signature length)
+    const sigLength = signature ? signature.length + 1 : 0; // +1 for space
+    const aiMaxChars = Math.max(20, charsToUse - sigLength);
 
     try {
       const res = await fetch(`${API_BASE_URL}/shorten`, {
@@ -144,13 +139,21 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           text: txtToUse, 
-          max_chars: charsToUse, 
+          max_chars: aiMaxChars, // Send reduced limit to AI
           shorten_urls: shortenUrls, 
           business_sector: sectorToUse,
-          protect_variables: protectVariables 
+          protect_variables: protectVariables,
+          target_language: langToUse
         }),
       });
       const data = await res.json();
+      
+      // Append Signature locally
+      if (signature) {
+        data.shortened_text = `${data.shortened_text} ${signature}`;
+        data.shortened_length = data.shortened_text.length;
+      }
+
       setResponse(data);
       
       addToHistory({
@@ -167,11 +170,10 @@ function App() {
     setLoading(false);
   };
 
-  // Refinement Handlers
   const refineShorter = () => {
     if (!response) return;
     if (response.shortened_length <= 50) {
-      setErrorMessage("⚠️ Maximum brevity reached. Further shortening may lose meaning.");
+      setErrorMessage("⚠️ Maximum brevity reached.");
       return;
     }
     const newLimit = Math.max(40, response.shortened_length - 20);
@@ -193,27 +195,18 @@ function App() {
   const getFragmentCount = (len) => Math.ceil(len / 160);
   const getFragmentColor = (count) => count === 1 ? "text-green-600 dark:text-green-400" : count === 2 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
 
-  // --- RENDERERS ---
-
   const renderReadingAge = () => {
     if (!response) return null;
     const analysis = calculateReadingAge(response.shortened_text);
     if (!analysis) return null;
-
     return (
       <div className="flex flex-wrap items-center gap-2 mt-4">
         <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${analysis.color}`}>
           <span>🎓 Reading Age: {analysis.score}</span>
           <span className="opacity-75 font-normal">({analysis.label})</span>
         </div>
-        
         {analysis.score > 10 && (
-          <button 
-            onClick={refineSimple}
-            className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition flex items-center gap-1"
-          >
-            <span>📉</span> Simplify
-          </button>
+          <button onClick={refineSimple} className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold hover:bg-blue-200 dark:hover:bg-blue-800 transition flex items-center gap-1"><span>📉</span> Simplify</button>
         )}
       </div>
     );
@@ -226,48 +219,19 @@ function App() {
     const savedFrags = oldFrags - newFrags;
     if (savedFrags <= 0) return null;
     const savedPerMsg = savedFrags * COST_PER_FRAGMENT;
-
     return (
       <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-5 animate-fade-in-up shadow-sm transition-colors">
-        <div className="flex items-center gap-2 mb-3 text-amber-800 dark:text-amber-400">
-           <span className="text-xl">💰</span>
-           <h3 className="font-bold">Potential Cost Savings</h3>
-        </div>
-        <p className="text-sm text-amber-900 dark:text-amber-300 mb-4">
-          You saved <strong>{savedFrags} SMS fragments</strong> per patient!
-        </p>
-        
+        <div className="flex items-center gap-2 mb-3 text-amber-800 dark:text-amber-400"><span className="text-xl">💰</span><h3 className="font-bold">Potential Cost Savings</h3></div>
+        <p className="text-sm text-amber-900 dark:text-amber-300 mb-4">You saved <strong>{savedFrags} SMS fragments</strong> per patient!</p>
         <div className="space-y-4">
-           {/* Per Message Line */}
-           <div className="flex justify-between items-center text-sm border-b border-amber-100 dark:border-amber-800 pb-2">
-              <span className="text-amber-700 dark:text-amber-400">Single Message</span>
-              <span className="font-bold text-amber-900 dark:text-amber-200">£{savedPerMsg.toFixed(3)}</span>
-           </div>
-
-           {/* Interactive Slider Section */}
+           <div className="flex justify-between items-center text-sm border-b border-amber-100 dark:border-amber-800 pb-2"><span className="text-amber-700 dark:text-amber-400">Single Message</span><span className="font-bold text-amber-900 dark:text-amber-200">£{savedPerMsg.toFixed(3)}</span></div>
            <div className="pt-1">
               <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                  List Size: {patientCount.toLocaleString()} patients
-                </label>
-                <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                  £{(savedPerMsg * patientCount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                </span>
+                <label className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">List Size: {patientCount.toLocaleString()} patients</label>
+                <span className="text-lg font-bold text-green-600 dark:text-green-400">£{(savedPerMsg * patientCount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
               </div>
-              <input 
-                type="range" 
-                min="1" 
-                max="100000" 
-                step="100"
-                value={patientCount} 
-                onChange={(e) => setPatientCount(Number(e.target.value))}
-                className="w-full h-2 bg-amber-200 dark:bg-amber-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-              />
-              <div className="flex justify-between text-[10px] text-amber-500 dark:text-amber-500 mt-1">
-                <span>1</span>
-                <span>50k</span>
-                <span>100k</span>
-              </div>
+              <input type="range" min="1" max="100000" step="100" value={patientCount} onChange={(e) => setPatientCount(Number(e.target.value))} className="w-full h-2 bg-amber-200 dark:bg-amber-800 rounded-lg appearance-none cursor-pointer accent-emerald-600" />
+              <div className="flex justify-between text-[10px] text-amber-500 dark:text-amber-500 mt-1"><span>1</span><span>50k</span><span>100k</span></div>
            </div>
         </div>
       </div>
@@ -277,24 +241,15 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans selection:bg-blue-100 dark:selection:bg-blue-900 transition-colors duration-300">
       
-      {/* --- HEADER --- */}
       <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 shadow-sm sticky top-0 z-20 transition-colors">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
-          
-          {/* LEFT: LOGO & HEADER */}
           <div className="flex items-center gap-5">
-            <img 
-              src={darkMode ? logoInv : logo} 
-              alt="TxtTrim" 
-              className="h-16 w-16 object-contain" 
-            />
+            <img src={darkMode ? logoInv : logo} alt="TxtTrim" className="h-16 w-16 object-contain" />
             <div className="flex flex-col">
               <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">TxtTrim</h1>
               <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mt-1">AI SMS Optimiser</p>
             </div>
           </div>
-
-          {/* RIGHT: CREDITS & ACTIONS */}
           <div className="flex items-center gap-3 mt-4 md:mt-0">
             <button onClick={() => setShowHistory(true)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition text-slate-600 dark:text-slate-200" title="History"><span className="text-lg">📜</span></button>
             <button onClick={() => setDarkMode(!darkMode)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition" title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>{darkMode ? "☀️" : "🌙"}</button>
@@ -309,13 +264,9 @@ function App() {
         </div>
       </header>
 
-      {/* --- MAIN CONTENT --- */}
       <main className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
         
-        {/* LEFT COLUMN: INPUTS */}
         <div className="lg:col-span-7 space-y-6">
-          
-          {/* Input Card */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
             <div className="flex justify-between items-end mb-2">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Original Message</label>
@@ -327,24 +278,15 @@ function App() {
                 <option value="dna_warning">🚫 Missed Appt (DNA)</option>
               </select>
             </div>
-
             <textarea className="w-full h-40 p-4 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-base resize-none" placeholder="Paste your long message here..." value={text} onChange={(e) => { setText(e.target.value); if (e.target.value) setErrorMessage(""); }} />
-            
             <div className="flex justify-between items-center mt-3 text-sm text-slate-500 dark:text-slate-400">
               <span>{text.length} chars</span>
-              <span className={`font-medium ${getFragmentColor(getFragmentCount(text.length))}`}>
-                {getFragmentCount(text.length)} SMS Fragment{getFragmentCount(text.length) !== 1 && 's'}
-              </span>
+              <span className={`font-medium ${getFragmentColor(getFragmentCount(text.length))}`}>{getFragmentCount(text.length)} SMS Fragment{getFragmentCount(text.length) !== 1 && 's'}</span>
             </div>
-
-            {errorMessage && (
-              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-100 dark:border-red-800 flex items-center gap-2 animate-shake">
-                <span>🚨</span> {errorMessage}
-              </div>
-            )}
+            {errorMessage && <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-100 dark:border-red-800 flex items-center gap-2 animate-shake"><span>🚨</span> {errorMessage}</div>}
           </div>
 
-          {/* Settings Card */}
+          {/* SETTINGS CARD */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors">
             <div>
               <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Target Limit</label>
@@ -366,6 +308,30 @@ function App() {
                 <option value="Legal">Legal (Formal)</option>
               </select>
             </div>
+
+            {/* NEW: LANGUAGE DROPDOWN */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Translate To</label>
+              <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)} className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="English">🇬🇧 English</option>
+                <option value="Polish">🇵🇱 Polish</option>
+                <option value="Urdu">🇵🇰 Urdu</option>
+                <option value="Romanian">🇷🇴 Romanian</option>
+                <option value="Punjabi">🇮🇳 Punjabi</option>
+              </select>
+            </div>
+
+            {/* NEW: SIGNATURE INPUT */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Auto Sign-off</label>
+              <input 
+                type="text" 
+                placeholder="- Dr Smith" 
+                value={signature} 
+                onChange={(e) => { setSignature(e.target.value); localStorage.setItem("txttrim_signature", e.target.value); }} 
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
             
             <div className="md:col-span-2 flex flex-col gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
               <div className="flex items-center gap-3">
@@ -382,56 +348,29 @@ function App() {
           <button onClick={() => handleShorten()} disabled={loading || !text.trim()} className={`w-full py-4 rounded-xl text-lg font-bold text-white shadow-md transition-all transform active:scale-[0.99] ${loading || !text.trim() ? "bg-slate-300 dark:bg-slate-700 cursor-not-allowed shadow-none" : "bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 hover:shadow-lg"}`}>{loading ? "Optimising..." : "Shorten Message ✨"}</button>
         </div>
 
-{/* RIGHT COLUMN: RESULTS */}
         <div className="lg:col-span-5 space-y-6">
-            
-            {/* PHONE PREVIEW & SUGGESTIONS */}
             <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-xl border-4 border-slate-800 dark:border-slate-950 overflow-hidden relative min-h-[300px] transition-all duration-500 ease-in-out">
-              {/* Notch/Header */}
-              <div className="bg-slate-100 dark:bg-slate-700 h-10 border-b border-slate-200 dark:border-slate-600 flex items-center justify-center">
-                 <div className="w-14 h-3 bg-slate-300 dark:bg-slate-500 rounded-full opacity-50"></div>
-              </div>
-
-              {/* Screen Content - Now uses 'min-h-0' to shrink to fit content */}
+              <div className="bg-slate-100 dark:bg-slate-700 h-10 border-b border-slate-200 dark:border-slate-600 flex items-center justify-center"><div className="w-14 h-3 bg-slate-300 dark:bg-slate-500 rounded-full opacity-50"></div></div>
               <div className="px-4 pt-4 pb-2 bg-slate-50 dark:bg-slate-900 flex flex-col gap-3">
                 <div className="text-center text-[10px] text-slate-400 my-1">Today 10:23 AM</div>
-                
-                {/* Message Bubble */}
-                <div className={`self-end max-w-[90%] p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm transition-all duration-500 
-                  ${response ? "bg-blue-500 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic"}`}>
-                  {response ? response.shortened_text : "Your shortened message will appear here..."}
-                </div>
-                
+                <div className={`self-end max-w-[90%] p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm transition-all duration-500 ${response ? "bg-blue-500 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic"}`}>{response ? response.shortened_text : "Your shortened message will appear here..."}</div>
                 {response && (
                   <>
-                    <div className="self-end text-[10px] text-slate-500 dark:text-slate-400 pr-1 -mt-1 animate-fade-in">
-                       Sent • {response.shortened_length} chars
-                    </div>
-
-                    {/* SMART SUGGESTIONS - Tighter Layout */}
+                    <div className="self-end text-[10px] text-slate-500 dark:text-slate-400 pr-1 -mt-1 animate-fade-in">Sent • {response.shortened_length} chars</div>
                     <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
                       <p className="text-[9px] uppercase font-bold text-slate-400 text-center mb-2 tracking-widest">Quick Refine</p>
                       <div className="flex gap-2 justify-center overflow-x-auto pb-1 hide-scrollbar">
-                         <button onClick={refineShorter} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1">
-                           <span>✂️</span> Shorter
-                         </button>
-                         <button onClick={refinePolite} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1">
-                           <span>🙏</span> Polite
-                         </button>
-                         <button onClick={refineFormal} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1">
-                           <span>👔</span> Formal
-                         </button>
+                         <button onClick={refineShorter} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1"><span>✂️</span> Shorter</button>
+                         <button onClick={refinePolite} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1"><span>🙏</span> Polite</button>
+                         <button onClick={refineFormal} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1"><span>👔</span> Formal</button>
                       </div>
                     </div>
                   </>
                 )}
-                
-                {/* Spacer to ensure buttons aren't glued to the very bottom edge */}
                 <div className="h-1"></div>
               </div>
             </div>
 
-            {/* RESULTS METRICS */}
             {response && (
               <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-5 animate-fade-in-up transition-colors">
                 <div className="flex justify-between items-center mb-4">
@@ -442,20 +381,15 @@ function App() {
                     <div><p className="text-xs text-emerald-600 dark:text-emerald-500 uppercase font-bold">Original</p><p className="text-lg font-mono text-slate-700 dark:text-slate-300">{response.original_length} chars</p></div>
                     <div><p className="text-xs text-emerald-600 dark:text-emerald-500 uppercase font-bold">New Length</p><p className="text-lg font-mono text-slate-900 dark:text-white font-bold">{response.shortened_length} chars</p></div>
                 </div>
-                
-                {/* READING AGE + SIMPLIFY BUTTON */}
                 {renderReadingAge()}
-                
                 <div className="flex gap-3 mt-4">
                   <button onClick={handleCopy} className={`flex-1 py-3 rounded-xl font-bold text-lg shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${copied ? "bg-emerald-700 text-white ring-2 ring-emerald-200" : "bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-emerald-200"}`}>{copied ? <><span>✅</span> Copied!</> : <><span>📋</span> Copy</>}</button>
-                  {/* MOBILE PREVIEW BUTTON */}
                   <button onClick={() => setShowQR(true)} className="px-5 py-3 rounded-xl bg-slate-800 dark:bg-slate-700 text-white font-bold shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600 transition" title="Test on Phone"><span className="text-lg">📱</span></button>
                 </div>
               </div>
             )}
 
             {renderSavings()}
-            
             <div className="text-center">
                 <button onClick={() => setShowDisclaimer(!showDisclaimer)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline">{showDisclaimer ? "Hide Disclaimer" : "Legal Disclaimer"}</button>
                 {showDisclaimer && <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 text-left bg-slate-100 dark:bg-slate-800 p-4 rounded-lg"><strong>Disclaimer:</strong> Do not enter confidential/PII data. TxtTrim is an automated tool. Always verify messages.</div>}
@@ -463,7 +397,6 @@ function App() {
         </div>
       </main>
 
-      {/* --- HISTORY SIDEBAR (DRAWER) --- */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>
@@ -484,28 +417,18 @@ function App() {
         </div>
       )}
 
-      {/* --- QR CODE MODAL --- */}
       {showQR && response && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowQR(false)}>
           <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center transform transition-all scale-100" onClick={e => e.stopPropagation()}>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Test on Device</h2>
             <p className="text-slate-500 text-sm mb-6">Scan to open in WhatsApp</p>
-            
-            <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block">
-              <QRCode 
-                value={`https://wa.me/?text=${encodeURIComponent(response.shortened_text)}`}
-                size={200}
-                fgColor="#1e293b"
-              />
-            </div>
-            
+            <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block"><QRCode value={`https://wa.me/?text=${encodeURIComponent(response.shortened_text)}`} size={200} fgColor="#1e293b" /></div>
             <p className="mt-6 text-xs text-slate-400">Works with iOS & Android Camera</p>
             <button onClick={() => setShowQR(false)} className="mt-6 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold transition">Close</button>
           </div>
         </div>
       )}
 
-      {/* ABOUT MODAL */}
       {showAbout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAbout(false)}>
           <div className="bg-white dark:bg-slate-800 max-w-lg w-full rounded-2xl p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
