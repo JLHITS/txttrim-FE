@@ -382,30 +382,56 @@ function App() {
           <button onClick={() => handleShorten()} disabled={loading || !text.trim()} className={`w-full py-4 rounded-xl text-lg font-bold text-white shadow-md transition-all transform active:scale-[0.99] ${loading || !text.trim() ? "bg-slate-300 dark:bg-slate-700 cursor-not-allowed shadow-none" : "bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 hover:shadow-lg"}`}>{loading ? "Optimising..." : "Shorten Message ✨"}</button>
         </div>
 
-        {/* RIGHT COLUMN: RESULTS */}
+{/* RIGHT COLUMN: RESULTS */}
         <div className="lg:col-span-5 space-y-6">
             
-            <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-xl border-4 border-slate-800 dark:border-slate-950 overflow-hidden relative min-h-[480px] transition-colors">
-              <div className="bg-slate-100 dark:bg-slate-700 h-12 border-b border-slate-200 dark:border-slate-600 flex items-center justify-center"><div className="w-16 h-4 bg-slate-300 dark:bg-slate-500 rounded-full opacity-50"></div></div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-900 h-full flex flex-col gap-4 min-h-[380px]">
-                <div className="text-center text-xs text-slate-400 my-2">Today 10:23 AM</div>
-                <div className={`self-end max-w-[85%] p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm transition-all duration-500 ${response ? "bg-blue-500 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic"}`}>{response ? response.shortened_text : "Your shortened message will appear here..."}</div>
+            {/* PHONE PREVIEW & SUGGESTIONS */}
+            <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-xl border-4 border-slate-800 dark:border-slate-950 overflow-hidden relative min-h-[300px] transition-all duration-500 ease-in-out">
+              {/* Notch/Header */}
+              <div className="bg-slate-100 dark:bg-slate-700 h-10 border-b border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                 <div className="w-14 h-3 bg-slate-300 dark:bg-slate-500 rounded-full opacity-50"></div>
+              </div>
+
+              {/* Screen Content - Now uses 'min-h-0' to shrink to fit content */}
+              <div className="px-4 pt-4 pb-2 bg-slate-50 dark:bg-slate-900 flex flex-col gap-3">
+                <div className="text-center text-[10px] text-slate-400 my-1">Today 10:23 AM</div>
+                
+                {/* Message Bubble */}
+                <div className={`self-end max-w-[90%] p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm transition-all duration-500 
+                  ${response ? "bg-blue-500 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic"}`}>
+                  {response ? response.shortened_text : "Your shortened message will appear here..."}
+                </div>
+                
                 {response && (
                   <>
-                    <div className="self-end text-xs text-slate-500 dark:text-slate-400 pr-1 animate-fade-in">Sent • {response.shortened_length} chars</div>
-                    <div className="mt-auto pt-6">
-                      <p className="text-[10px] uppercase font-bold text-slate-400 text-center mb-2">Quick Refine</p>
-                      <div className="flex gap-2 justify-center overflow-x-auto pb-2">
-                         <button onClick={refineShorter} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">✂️ Make Shorter</button>
-                         <button onClick={refinePolite} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">🙏 More Polite</button>
-                         <button onClick={refineFormal} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">👔 More Formal</button>
+                    <div className="self-end text-[10px] text-slate-500 dark:text-slate-400 pr-1 -mt-1 animate-fade-in">
+                       Sent • {response.shortened_length} chars
+                    </div>
+
+                    {/* SMART SUGGESTIONS - Tighter Layout */}
+                    <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+                      <p className="text-[9px] uppercase font-bold text-slate-400 text-center mb-2 tracking-widest">Quick Refine</p>
+                      <div className="flex gap-2 justify-center overflow-x-auto pb-1 hide-scrollbar">
+                         <button onClick={refineShorter} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1">
+                           <span>✂️</span> Shorter
+                         </button>
+                         <button onClick={refinePolite} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1">
+                           <span>🙏</span> Polite
+                         </button>
+                         <button onClick={refineFormal} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition flex items-center gap-1">
+                           <span>👔</span> Formal
+                         </button>
                       </div>
                     </div>
                   </>
                 )}
+                
+                {/* Spacer to ensure buttons aren't glued to the very bottom edge */}
+                <div className="h-1"></div>
               </div>
             </div>
 
+            {/* RESULTS METRICS */}
             {response && (
               <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-5 animate-fade-in-up transition-colors">
                 <div className="flex justify-between items-center mb-4">
