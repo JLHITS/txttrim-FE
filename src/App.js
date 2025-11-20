@@ -11,12 +11,23 @@ const API_BASE_URL = "https://txttrim-backend.onrender.com";
 const TRACKING_ID = "G-KKM0XZD821";
 const COST_PER_FRAGMENT = 0.022; // £0.022 per SMS fragment
 
+// --- TEMPLATES DATA ---
+const TEMPLATES = {
+  "none": "",
+  "flu_invite": "Dear Patient, this is a message from the surgery. We are writing to invite you to book your seasonal flu vaccination. We have clinics running this Saturday. Please book your appointment online by clicking this link: https://www.nhs.uk/conditions/vaccinations/flu-influenza-vaccine/",
+  "appt_reminder": "Dear Patient, this is a reminder for your upcoming appointment at the surgery on [Date] at [Time]. If you are unable to attend, please cancel so we can offer the slot to another patient. Call us on 0115 000 0000.",
+  "test_results": "Dear Patient, your recent test results have returned and the doctor has reviewed them. They are normal and no further action is required. You do not need to contact the surgery.",
+  "dna_warning": "Dear Patient, our records show you missed your appointment today. Please be aware that missed appointments cost the NHS time and money. If you cannot attend in future, please cancel in advance."
+};
+
 function App() {
   // State
   const [text, setText] = useState("");
   const [maxChars, setMaxChars] = useState(160);
   const [businessSector, setBusinessSector] = useState("General");
   const [shortenUrls, setShortenUrls] = useState(true);
+  // NEW: State for variable protection
+  const [protectVariables, setProtectVariables] = useState(true);
   
   const [response, setResponse] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -54,7 +65,14 @@ function App() {
       const res = await fetch(`${API_BASE_URL}/shorten`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, max_chars: maxChars, shorten_urls: shortenUrls, business_sector: businessSector }),
+        body: JSON.stringify({ 
+          text, 
+          max_chars: maxChars, 
+          shorten_urls: shortenUrls, 
+          business_sector: businessSector,
+          // Send the new setting to backend
+          protect_variables: protectVariables 
+        }),
       });
       const data = await res.json();
       setResponse(data);
@@ -85,7 +103,6 @@ function App() {
     const newFrags = getFragmentCount(response.shortened_length);
     const savedFrags = oldFrags - newFrags;
 
-    // If no money saved, don't show the box
     if (savedFrags <= 0) return null;
 
     const savedPerMsg = savedFrags * COST_PER_FRAGMENT;
@@ -138,7 +155,7 @@ function App() {
           {/* RIGHT: CREDITS & ABOUT */}
           <div className="flex items-center gap-6">
             
-            {/* Credits Badge (Now with LINKS) */}
+            {/* Credits Badge */}
             <div className="flex items-center gap-3 bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
                 
@@ -176,7 +193,28 @@ function App() {
           
           {/* Input Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Original Message</label>
+            
+            {/* LABEL & TEMPLATE DROPDOWN HEADER */}
+            <div className="flex justify-between items-end mb-2">
+              <label className="text-sm font-semibold text-slate-700">Original Message</label>
+              <select 
+                className="text-xs bg-slate-100 border-none rounded-lg py-1 px-3 text-slate-600 font-medium cursor-pointer hover:bg-slate-200 focus:ring-0 transition-colors"
+                onChange={(e) => {
+                  if (e.target.value !== "none") {
+                    setText(TEMPLATES[e.target.value]);
+                    setErrorMessage("");
+                  }
+                }}
+                defaultValue="none"
+              >
+                <option value="none">✨ Load a Template...</option>
+                <option value="flu_invite">💉 Flu Invitation</option>
+                <option value="appt_reminder">📅 Appt Reminder</option>
+                <option value="test_results">✅ Normal Results</option>
+                <option value="dna_warning">🚫 Missed Appt (DNA)</option>
+              </select>
+            </div>
+
             <textarea
               className="w-full h-40 p-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-base resize-none"
               placeholder="Paste your long message here..."
@@ -236,18 +274,37 @@ function App() {
               </select>
             </div>
             
-            <div className="md:col-span-2 flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-              <input 
-                type="checkbox" 
-                id="shortenUrl"
-                checked={shortenUrls}
-                onChange={() => setShortenUrls(!shortenUrls)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="shortenUrl" className="text-sm text-blue-900 cursor-pointer select-none">
-                Automatically shorten URLs using <strong>is.gd</strong>
-              </label>
+            {/* CHECKBOXES SECTION */}
+            <div className="md:col-span-2 flex flex-col gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+              {/* URL Shortener Checkbox */}
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox" 
+                  id="shortenUrl"
+                  checked={shortenUrls}
+                  onChange={() => setShortenUrls(!shortenUrls)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="shortenUrl" className="text-sm text-blue-900 cursor-pointer select-none">
+                  Automatically shorten URLs using <strong>is.gd</strong>
+                </label>
+              </div>
+
+              {/* NEW: Merge Field Protection Checkbox */}
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox" 
+                  id="protectVars"
+                  checked={protectVariables}
+                  onChange={() => setProtectVariables(!protectVariables)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="protectVars" className="text-sm text-blue-900 cursor-pointer select-none">
+                  Keep merge fields (e.g. <strong>[Date]</strong>, <strong>[Name]</strong>)
+                </label>
+              </div>
             </div>
+
           </div>
 
           {/* Action Button */}
