@@ -3,13 +3,14 @@ import ReactGA from "react-ga4";
 
 // --- ASSETS ---
 import logo from "./assets/logo.png"; 
+import logoInv from "./assets/logoINV.png"; 
 import rushcliffeLogo from "./assets/rushcliffepcn.png";
 import nottsWestLogo from "./assets/nottinghamwestpcn.png";
 
 // --- CONFIG ---
 const API_BASE_URL = "https://txttrim-backend.onrender.com";
 const TRACKING_ID = "G-KKM0XZD821";
-const COST_PER_FRAGMENT = 0.022; // £0.022 per SMS fragment
+const COST_PER_FRAGMENT = 0.022; 
 
 // --- TEMPLATES DATA ---
 const TEMPLATES = {
@@ -21,12 +22,11 @@ const TEMPLATES = {
 };
 
 function App() {
-  // State
+  // --- STATE ---
   const [text, setText] = useState("");
   const [maxChars, setMaxChars] = useState(160);
   const [businessSector, setBusinessSector] = useState("General");
   const [shortenUrls, setShortenUrls] = useState(true);
-  // NEW: State for variable protection
   const [protectVariables, setProtectVariables] = useState(true);
   
   const [response, setResponse] = useState(null);
@@ -37,6 +37,9 @@ function App() {
   // UI Toggles
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
 
   // --- EFFECTS ---
   useEffect(() => {
@@ -45,19 +48,54 @@ function App() {
     
     const storedSector = localStorage.getItem("preferredSector");
     const storedMaxChars = localStorage.getItem("preferredMaxChars");
+    const storedHistory = JSON.parse(localStorage.getItem("txttrim_history") || "[]");
+    
     if (storedSector) setBusinessSector(storedSector);
     if (storedMaxChars) setMaxChars(Number(storedMaxChars));
+    if (storedHistory) setHistory(storedHistory);
+
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setDarkMode(true);
+    }
   }, []);
 
-  // --- HANDLERS ---
-  const handleShorten = async () => {
-    if (!text.trim()) {
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // --- ACTIONS ---
+  const addToHistory = (newItem) => {
+    const updated = [newItem, ...history].slice(0, 10);
+    setHistory(updated);
+    localStorage.setItem("txttrim_history", JSON.stringify(updated));
+  };
+
+  const loadFromHistory = (item) => {
+    setText(item.original);
+    setResponse(item.response);
+    setShowHistory(false);
+  };
+
+  const handleShorten = async (overrideParams = {}) => {
+    const txtToUse = overrideParams.text || text;
+    const charsToUse = overrideParams.max_chars || maxChars;
+    const sectorToUse = overrideParams.business_sector || businessSector;
+
+    if (!txtToUse.trim()) {
       setErrorMessage("⚠️ Please enter a message first.");
       return;
     }
+    
     setErrorMessage("");
     setLoading(true);
     setCopied(false);
+
+    if (overrideParams.max_chars) setMaxChars(overrideParams.max_chars);
+    if (overrideParams.business_sector) setBusinessSector(overrideParams.business_sector);
 
     ReactGA.event({ category: "User", action: "Clicked Shorten", label: "Shorten Attempt" });
 
@@ -66,22 +104,50 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          text, 
-          max_chars: maxChars, 
+          text: txtToUse, 
+          max_chars: charsToUse, 
           shorten_urls: shortenUrls, 
-          business_sector: businessSector,
-          // Send the new setting to backend
+          business_sector: sectorToUse,
           protect_variables: protectVariables 
         }),
       });
       const data = await res.json();
       setResponse(data);
+      
+      addToHistory({
+        id: Date.now(),
+        timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        original: txtToUse,
+        response: data
+      });
+
     } catch (error) {
       console.error("Error:", error);
       setErrorMessage("Connection error. Please try again.");
     }
     setLoading(false);
   };
+
+  // --- REFINEMENT HANDLERS (UPDATED) ---
+  
+  const refineShorter = () => {
+    if (!response) return;
+
+    // FAILSAFE: If current length is already <= 50, stop.
+    if (response.shortened_length <= 50) {
+      setErrorMessage("⚠️ Maximum brevity reached. Further shortening may lose meaning.");
+      return;
+    }
+
+    // Calculate new limit (Current length - 20)
+    // But NEVER go below 40 characters as a hard floor
+    const newLimit = Math.max(40, response.shortened_length - 20);
+    
+    handleShorten({ max_chars: newLimit });
+  };
+
+  const refinePolite = () => handleShorten({ business_sector: "Healthcare" });
+  const refineFormal = () => handleShorten({ business_sector: "Legal" });
 
   const handleCopy = () => {
     if (response?.shortened_text) {
@@ -93,44 +159,33 @@ function App() {
   };
 
   const getFragmentCount = (len) => Math.ceil(len / 160);
-  const getFragmentColor = (count) => count === 1 ? "text-green-600" : count === 2 ? "text-yellow-600" : "text-red-600";
+  const getFragmentColor = (count) => count === 1 ? "text-green-600 dark:text-green-400" : count === 2 ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400";
 
-  // --- SAVINGS CALCULATION ---
   const renderSavings = () => {
     if (!response) return null;
-
     const oldFrags = getFragmentCount(response.original_length);
     const newFrags = getFragmentCount(response.shortened_length);
     const savedFrags = oldFrags - newFrags;
-
     if (savedFrags <= 0) return null;
-
     const savedPerMsg = savedFrags * COST_PER_FRAGMENT;
 
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 animate-fade-in-up shadow-sm">
-        <div className="flex items-center gap-2 mb-3 text-amber-800">
+      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-5 animate-fade-in-up shadow-sm transition-colors">
+        <div className="flex items-center gap-2 mb-3 text-amber-800 dark:text-amber-400">
            <span className="text-xl">💰</span>
            <h3 className="font-bold">Potential Cost Savings</h3>
         </div>
-        
-        <p className="text-sm text-amber-900 mb-4">
-          You saved <strong>{savedFrags} SMS fragments</strong> per patient! 
-          <br/>At <span className="font-mono">£{COST_PER_FRAGMENT}</span> per fragment, here is what you save:
+        <p className="text-sm text-amber-900 dark:text-amber-300 mb-4">
+          You saved <strong>{savedFrags} SMS fragments</strong> per patient!
         </p>
-
         <div className="space-y-2">
-           <div className="flex justify-between items-center text-sm border-b border-amber-100 pb-1">
-              <span className="text-amber-700">Single Message</span>
-              <span className="font-bold text-amber-900">£{savedPerMsg.toFixed(3)}</span>
-           </div>
-           <div className="flex justify-between items-center text-sm border-b border-amber-100 pb-1">
-              <span className="text-amber-700">List of 1,000 Patients</span>
-              <span className="font-bold text-green-700">£{(savedPerMsg * 1000).toFixed(2)}</span>
+           <div className="flex justify-between items-center text-sm border-b border-amber-100 dark:border-amber-800 pb-1">
+              <span className="text-amber-700 dark:text-amber-400">Single Message</span>
+              <span className="font-bold text-amber-900 dark:text-amber-200">£{savedPerMsg.toFixed(3)}</span>
            </div>
            <div className="flex justify-between items-center text-sm font-medium pt-1">
-              <span className="text-amber-700">List of 5,000 Patients</span>
-              <span className="font-bold text-green-700">£{(savedPerMsg * 5000).toFixed(2)}</span>
+              <span className="text-amber-700 dark:text-amber-400">List of 1,000 Patients</span>
+              <span className="font-bold text-green-700 dark:text-green-400">£{(savedPerMsg * 1000).toFixed(2)}</span>
            </div>
         </div>
       </div>
@@ -138,67 +193,84 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-100">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans selection:bg-blue-100 dark:selection:bg-blue-900 transition-colors duration-300">
       
       {/* --- HEADER --- */}
-      <header className="w-full bg-white border-b border-slate-200 py-3 shadow-sm sticky top-0 z-20">
+      <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-3 shadow-sm sticky top-0 z-20 transition-colors">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
           
-          {/* LEFT: LOGO */}
+          {/* LEFT: LOGO (DYNAMIC SWITCH) */}
           <div className="flex items-center gap-3">
-            <img src={logo} alt="TxtTrim" className="h-12 w-auto object-contain" />
+            <img 
+              src={darkMode ? logoInv : logo} 
+              alt="TxtTrim" 
+              className="h-12 w-auto object-contain" 
+            />
             <div className="flex flex-col justify-center h-full">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">AI SMS Optimiser</p>
             </div>
           </div>
 
-          {/* RIGHT: CREDITS & ABOUT */}
-          <div className="flex items-center gap-6">
+          {/* RIGHT: CREDITS & ACTIONS */}
+          <div className="flex items-center gap-3">
             
-            {/* Credits Badge */}
-            <div className="flex items-center gap-3 bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-sm">
+            {/* 1. HISTORY BUTTON */}
+            <button 
+              onClick={() => setShowHistory(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition text-slate-600 dark:text-slate-200"
+              title="History"
+            >
+               <span className="text-lg">📜</span>
+            </button>
+
+            {/* 2. DARK MODE TOGGLE */}
+            <button 
+              onClick={() => setDarkMode(!darkMode)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+              title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {darkMode ? "☀️" : "🌙"}
+            </button>
+
+            {/* 3. ABOUT BUTTON (Icon) */}
+            <button 
+              onClick={() => setShowAbout(!showAbout)} 
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+              title="About TxtTrim"
+            >
+                <span className="text-lg">ℹ️</span>
+            </button>
+
+            {/* Spacer/Divider */}
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
+
+            {/* 4. MADE IN BADGE (Far Right) */}
+            <div className="hidden sm:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-1.5 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
-                
                 <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
-                  <img 
-                    src={rushcliffeLogo} 
-                    alt="Rushcliffe PCN" 
-                    className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply" 
-                    title="Rushcliffe PCN" 
-                  />
+                  <img src={rushcliffeLogo} alt="Rushcliffe PCN" className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" />
                 </a>
-                
                 <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer">
-                  <img 
-                    src={nottsWestLogo} 
-                    alt="Nottingham West PCN" 
-                    className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply" 
-                    title="Nottingham West PCN" 
-                  />
+                  <img src={nottsWestLogo} alt="Nottingham West PCN" className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" />
                 </a>
             </div>
 
-            <button onClick={() => setShowAbout(!showAbout)} className="text-sm font-medium text-slate-500 hover:text-blue-600 transition">
-                About
-            </button>
           </div>
         </div>
       </header>
 
       {/* --- MAIN CONTENT --- */}
-      <main className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
         
         {/* LEFT COLUMN: INPUTS */}
         <div className="lg:col-span-7 space-y-6">
           
           {/* Input Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            
-            {/* LABEL & TEMPLATE DROPDOWN HEADER */}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
             <div className="flex justify-between items-end mb-2">
-              <label className="text-sm font-semibold text-slate-700">Original Message</label>
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Original Message</label>
               <select 
-                className="text-xs bg-slate-100 border-none rounded-lg py-1 px-3 text-slate-600 font-medium cursor-pointer hover:bg-slate-200 focus:ring-0 transition-colors"
+                className="text-xs bg-slate-100 dark:bg-slate-700 border-none rounded-lg py-1 px-3 text-slate-600 dark:text-slate-300 font-medium cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 focus:ring-0 transition-colors"
                 onChange={(e) => {
                   if (e.target.value !== "none") {
                     setText(TEMPLATES[e.target.value]);
@@ -216,7 +288,7 @@ function App() {
             </div>
 
             <textarea
-              className="w-full h-40 p-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-base resize-none"
+              className="w-full h-40 p-4 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-base resize-none"
               placeholder="Paste your long message here..."
               value={text}
               onChange={(e) => {
@@ -224,30 +296,30 @@ function App() {
                 if (e.target.value) setErrorMessage("");
               }}
             />
-            <div className="flex justify-between items-center mt-3 text-sm text-slate-500">
+            <div className="flex justify-between items-center mt-3 text-sm text-slate-500 dark:text-slate-400">
               <span>{text.length} chars</span>
               <span className={`font-medium ${getFragmentColor(getFragmentCount(text.length))}`}>
                 {getFragmentCount(text.length)} SMS Fragment{getFragmentCount(text.length) !== 1 && 's'}
               </span>
             </div>
             {errorMessage && (
-              <div className="mt-3 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100 flex items-center gap-2">
+              <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg border border-red-100 dark:border-red-800 flex items-center gap-2 animate-shake">
                 <span>🚨</span> {errorMessage}
               </div>
             )}
           </div>
 
           {/* Settings Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 grid grid-cols-1 md:grid-cols-2 gap-6 transition-colors">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Target Limit</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Target Limit</label>
               <select 
                 value={maxChars}
                 onChange={(e) => {
                   setMaxChars(Number(e.target.value));
                   localStorage.setItem("preferredMaxChars", e.target.value);
                 }}
-                className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value={160}>Strict (160 chars - 1 SMS)</option>
                 <option value={320}>Standard (320 chars - 2 SMS)</option>
@@ -256,14 +328,14 @@ function App() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tone / Sector</label>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Tone / Sector</label>
               <select 
                 value={businessSector}
                 onChange={(e) => {
                   setBusinessSector(e.target.value);
                   localStorage.setItem("preferredSector", e.target.value);
                 }}
-                className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="General">General (Neutral)</option>
                 <option value="Healthcare">Healthcare (Empathetic)</option>
@@ -274,9 +346,8 @@ function App() {
               </select>
             </div>
             
-            {/* CHECKBOXES SECTION */}
-            <div className="md:col-span-2 flex flex-col gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
-              {/* URL Shortener Checkbox */}
+            {/* CHECKBOXES */}
+            <div className="md:col-span-2 flex flex-col gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
               <div className="flex items-center gap-3">
                 <input 
                   type="checkbox" 
@@ -285,12 +356,10 @@ function App() {
                   onChange={() => setShortenUrls(!shortenUrls)}
                   className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                 />
-                <label htmlFor="shortenUrl" className="text-sm text-blue-900 cursor-pointer select-none">
+                <label htmlFor="shortenUrl" className="text-sm text-blue-900 dark:text-blue-200 cursor-pointer select-none">
                   Automatically shorten URLs using <strong>is.gd</strong>
                 </label>
               </div>
-
-              {/* NEW: Merge Field Protection Checkbox */}
               <div className="flex items-center gap-3">
                 <input 
                   type="checkbox" 
@@ -299,22 +368,20 @@ function App() {
                   onChange={() => setProtectVariables(!protectVariables)}
                   className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                 />
-                <label htmlFor="protectVars" className="text-sm text-blue-900 cursor-pointer select-none">
+                <label htmlFor="protectVars" className="text-sm text-blue-900 dark:text-blue-200 cursor-pointer select-none">
                   Keep merge fields (e.g. <strong>[Date]</strong>, <strong>[Name]</strong>)
                 </label>
               </div>
             </div>
-
           </div>
 
-          {/* Action Button */}
           <button
-            onClick={handleShorten}
+            onClick={() => handleShorten()}
             disabled={loading || !text.trim()}
             className={`w-full py-4 rounded-xl text-lg font-bold text-white shadow-md transition-all transform active:scale-[0.99]
               ${loading || !text.trim() 
-                ? "bg-slate-300 cursor-not-allowed shadow-none" 
-                : "bg-blue-600 hover:bg-blue-700 hover:shadow-lg"
+                ? "bg-slate-300 dark:bg-slate-700 cursor-not-allowed shadow-none" 
+                : "bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 hover:shadow-lg"
               }`}
           >
             {loading ? "Optimising..." : "Shorten Message ✨"}
@@ -325,47 +392,65 @@ function App() {
         {/* RIGHT COLUMN: RESULTS */}
         <div className="lg:col-span-5 space-y-6">
             
-            {/* PHONE PREVIEW */}
-            <div className="bg-white rounded-[2rem] shadow-xl border-4 border-slate-800 overflow-hidden relative min-h-[400px]">
-              <div className="bg-slate-100 h-12 border-b border-slate-200 flex items-center justify-center">
-                 <div className="w-16 h-4 bg-slate-300 rounded-full opacity-50"></div>
+            {/* PHONE PREVIEW & SUGGESTIONS */}
+            <div className="bg-white dark:bg-slate-800 rounded-[2rem] shadow-xl border-4 border-slate-800 dark:border-slate-950 overflow-hidden relative min-h-[480px] transition-colors">
+              <div className="bg-slate-100 dark:bg-slate-700 h-12 border-b border-slate-200 dark:border-slate-600 flex items-center justify-center">
+                 <div className="w-16 h-4 bg-slate-300 dark:bg-slate-500 rounded-full opacity-50"></div>
               </div>
-              <div className="p-4 bg-slate-50 h-full flex flex-col gap-4 min-h-[300px]">
+              <div className="p-4 bg-slate-50 dark:bg-slate-900 h-full flex flex-col gap-4 min-h-[380px]">
                 <div className="text-center text-xs text-slate-400 my-2">Today 10:23 AM</div>
+                
+                {/* Message Bubble */}
                 <div className={`self-end max-w-[85%] p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm transition-all duration-500
-                  ${response ? "bg-blue-500 text-white" : "bg-slate-200 text-slate-400 italic"}`}>
+                  ${response ? "bg-blue-500 text-white" : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 italic"}`}>
                   {response ? response.shortened_text : "Your shortened message will appear here..."}
                 </div>
+                
                 {response && (
-                  <div className="self-end text-xs text-slate-500 pr-1 animate-fade-in">
-                     Sent • {response.shortened_length} chars
-                  </div>
+                  <>
+                    <div className="self-end text-xs text-slate-500 dark:text-slate-400 pr-1 animate-fade-in">
+                       Sent • {response.shortened_length} chars
+                    </div>
+
+                    {/* SMART SUGGESTIONS */}
+                    <div className="mt-auto pt-6">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 text-center mb-2">Quick Refine</p>
+                      <div className="flex gap-2 justify-center overflow-x-auto pb-2">
+                         <button onClick={refineShorter} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">
+                           ✂️ Make Shorter
+                         </button>
+                         <button onClick={refinePolite} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">
+                           🙏 More Polite
+                         </button>
+                         <button onClick={refineFormal} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition">
+                           👔 More Formal
+                         </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
 
             {/* RESULTS METRICS */}
             {response && (
-              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-5 animate-fade-in-up">
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-5 animate-fade-in-up transition-colors">
                 <div className="flex justify-between items-center mb-4">
-                   <h3 className="font-bold text-emerald-800">Optimisation Results</h3>
-                   <span className="text-xs bg-white px-2 py-1 rounded border border-emerald-200 font-mono text-emerald-600">
+                   <h3 className="font-bold text-emerald-800 dark:text-emerald-400">Optimisation Results</h3>
+                   <span className="text-xs bg-white dark:bg-emerald-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-700 font-mono text-emerald-600 dark:text-emerald-300">
                      -{((1 - (response.shortened_length / response.original_length)) * 100).toFixed(0)}% Size
                    </span>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <p className="text-xs text-emerald-600 uppercase font-bold">Original</p>
-                        <p className="text-lg font-mono text-slate-700">{response.original_length} chars</p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-500 uppercase font-bold">Original</p>
+                        <p className="text-lg font-mono text-slate-700 dark:text-slate-300">{response.original_length} chars</p>
                     </div>
                     <div>
-                        <p className="text-xs text-emerald-600 uppercase font-bold">New Length</p>
-                        <p className="text-lg font-mono text-slate-900 font-bold">{response.shortened_length} chars</p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-500 uppercase font-bold">New Length</p>
+                        <p className="text-lg font-mono text-slate-900 dark:text-white font-bold">{response.shortened_length} chars</p>
                     </div>
                 </div>
-                
-                {/* COPY BUTTON */}
                 <button 
                   onClick={handleCopy}
                   className={`w-full py-3 rounded-xl font-bold text-lg shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center gap-2
@@ -374,47 +459,76 @@ function App() {
                       : "bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-emerald-200"
                     }`}
                 >
-                  {copied ? (
-                    <><span>✅</span> Copied!</>
-                  ) : (
-                    <><span>📋</span> Copy Text</>
-                  )}
+                  {copied ? <><span>✅</span> Copied!</> : <><span>📋</span> Copy Text</>}
                 </button>
               </div>
             )}
 
-            {/* SAVINGS BOX (Only shows if money saved) */}
             {renderSavings()}
 
-            {/* DISCLAIMER TOGGLE */}
             <div className="text-center">
-                <button onClick={() => setShowDisclaimer(!showDisclaimer)} className="text-xs text-slate-400 underline">
+                <button onClick={() => setShowDisclaimer(!showDisclaimer)} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline">
                     {showDisclaimer ? "Hide Disclaimer" : "Legal Disclaimer"}
                 </button>
                 {showDisclaimer && (
-                    <div className="mt-4 text-xs text-slate-500 text-left bg-slate-100 p-4 rounded-lg">
-                        <strong>Disclaimer:</strong> Do not enter confidential/PII data. 
-                        TxtTrim is an automated tool and may produce errors. 
-                        Always verify message content before sending.
+                    <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 text-left bg-slate-100 dark:bg-slate-800 p-4 rounded-lg">
+                        <strong>Disclaimer:</strong> Do not enter confidential/PII data. TxtTrim is an automated tool. Always verify messages.
                     </div>
                 )}
             </div>
         </div>
       </main>
 
+      {/* --- HISTORY SIDEBAR (DRAWER) --- */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setShowHistory(false)}></div>
+          
+          {/* Drawer */}
+          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl p-6 overflow-y-auto transition-colors">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold dark:text-white">Recent History</h2>
+              <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">Close</button>
+            </div>
+
+            {history.length === 0 ? (
+              <p className="text-slate-400 text-center mt-10">No history yet. Start shortening!</p>
+            ) : (
+              <div className="space-y-4">
+                {history.map((item) => (
+                  <div key={item.id} onClick={() => loadFromHistory(item)} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 hover:border-blue-300 cursor-pointer transition group">
+                    <div className="flex justify-between text-xs text-slate-400 mb-2">
+                      <span>{item.timestamp}</span>
+                      <span className="group-hover:text-blue-500">Load ↺</span>
+                    </div>
+                    <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 font-mono bg-white dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-700">
+                      {item.response.shortened_text}
+                    </p>
+                    <div className="mt-2 flex gap-2 text-xs">
+                      <span className="text-green-600 dark:text-green-400">{item.response.shortened_length} chars</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ABOUT MODAL */}
       {showAbout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAbout(false)}>
-          <div className="bg-white max-w-lg w-full rounded-2xl p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h2 className="text-2xl font-bold mb-4">About TxtTrim</h2>
-            <p className="text-slate-600 mb-4">
+          <div className="bg-white dark:bg-slate-800 max-w-lg w-full rounded-2xl p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold mb-4 dark:text-white">About TxtTrim</h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-4">
               TxtTrim reduces SMS costs for healthcare and businesses by using AI to shorten messages without losing meaning.
             </p>
-            <div className="bg-slate-100 p-4 rounded-lg mb-6 text-sm">
-              <strong>Open Source:</strong> View code on <a href="https://github.com/JLHITS/txttrim-FE" className="text-blue-600 underline">GitHub</a>.<br/>
-              <strong>Contact:</strong> <a href="mailto:lhits@lhits.co.uk" className="text-blue-600 underline">lhits@lhits.co.uk</a>
+            <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-lg mb-6 text-sm dark:text-slate-200">
+              <strong>Open Source:</strong> View code on <a href="https://github.com/JLHITS/txttrim-FE" className="text-blue-600 dark:text-blue-400 underline">GitHub</a>.<br/>
+              <strong>Contact:</strong> <a href="mailto:lhits@lhits.co.uk" className="text-blue-600 dark:text-blue-400 underline">lhits@lhits.co.uk</a>
             </div>
-            <button onClick={() => setShowAbout(false)} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">Close</button>
+            <button onClick={() => setShowAbout(false)} className="w-full bg-slate-900 dark:bg-black text-white py-3 rounded-xl font-bold">Close</button>
           </div>
         </div>
       )}
