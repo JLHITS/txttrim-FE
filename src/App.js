@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from "react";
 import ReactGA from "react-ga4";
+
+// --- ASSETS ---
 import logo from "./assets/logo.png"; 
+import rushcliffeLogo from "./assets/rushcliffepcn.png";
+import nottsWestLogo from "./assets/nottinghamwestpcn.png";
 
 // --- CONFIG ---
 const API_BASE_URL = "https://txttrim-backend.onrender.com";
 const TRACKING_ID = "G-KKM0XZD821";
+const COST_PER_FRAGMENT = 0.022; // £0.022 per SMS fragment
 
 function App() {
   // State
@@ -27,7 +32,6 @@ function App() {
     ReactGA.initialize(TRACKING_ID);
     ReactGA.send("pageview");
     
-    // Load prefs
     const storedSector = localStorage.getItem("preferredSector");
     const storedMaxChars = localStorage.getItem("preferredMaxChars");
     if (storedSector) setBusinessSector(storedSector);
@@ -70,26 +74,96 @@ function App() {
     }
   };
 
-  // Helper to calculate fragments visually
   const getFragmentCount = (len) => Math.ceil(len / 160);
   const getFragmentColor = (count) => count === 1 ? "text-green-600" : count === 2 ? "text-yellow-600" : "text-red-600";
+
+  // --- SAVINGS CALCULATION ---
+  const renderSavings = () => {
+    if (!response) return null;
+
+    const oldFrags = getFragmentCount(response.original_length);
+    const newFrags = getFragmentCount(response.shortened_length);
+    const savedFrags = oldFrags - newFrags;
+
+    // If no money saved, don't show the box
+    if (savedFrags <= 0) return null;
+
+    const savedPerMsg = savedFrags * COST_PER_FRAGMENT;
+
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 animate-fade-in-up shadow-sm">
+        <div className="flex items-center gap-2 mb-3 text-amber-800">
+           <span className="text-xl">💰</span>
+           <h3 className="font-bold">Potential Cost Savings</h3>
+        </div>
+        
+        <p className="text-sm text-amber-900 mb-4">
+          You saved <strong>{savedFrags} SMS fragments</strong> per patient! 
+          <br/>At <span className="font-mono">£{COST_PER_FRAGMENT}</span> per fragment, here is what you save:
+        </p>
+
+        <div className="space-y-2">
+           <div className="flex justify-between items-center text-sm border-b border-amber-100 pb-1">
+              <span className="text-amber-700">Single Message</span>
+              <span className="font-bold text-amber-900">£{savedPerMsg.toFixed(3)}</span>
+           </div>
+           <div className="flex justify-between items-center text-sm border-b border-amber-100 pb-1">
+              <span className="text-amber-700">List of 1,000 Patients</span>
+              <span className="font-bold text-green-700">£{(savedPerMsg * 1000).toFixed(2)}</span>
+           </div>
+           <div className="flex justify-between items-center text-sm font-medium pt-1">
+              <span className="text-amber-700">List of 5,000 Patients</span>
+              <span className="font-bold text-green-700">£{(savedPerMsg * 5000).toFixed(2)}</span>
+           </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-100">
       
       {/* --- HEADER --- */}
-      <header className="w-full bg-white border-b border-slate-200 py-4 shadow-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
+      <header className="w-full bg-white border-b border-slate-200 py-3 shadow-sm sticky top-0 z-20">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 md:gap-0">
+          
+          {/* LEFT: LOGO */}
           <div className="flex items-center gap-3">
-            {/* Ensure logo exists in assets or comment this out */}
-            <img src={logo} alt="TxtTrim" className="h-10 w-auto" />
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">TxtTrim</h1>
-              <p className="text-xs text-slate-500">AI SMS Optimiser</p>
+            <img src={logo} alt="TxtTrim" className="h-12 w-auto object-contain" />
+            <div className="flex flex-col justify-center h-full">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">AI SMS Optimiser</p>
             </div>
           </div>
-          <div className="flex gap-3 text-sm font-medium">
-            <button onClick={() => setShowAbout(!showAbout)} className="text-slate-500 hover:text-blue-600 transition">About</button>
+
+          {/* RIGHT: CREDITS & ABOUT */}
+          <div className="flex items-center gap-6">
+            
+            {/* Credits Badge (Now with LINKS) */}
+            <div className="flex items-center gap-3 bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
+                
+                <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
+                  <img 
+                    src={rushcliffeLogo} 
+                    alt="Rushcliffe PCN" 
+                    className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply" 
+                    title="Rushcliffe PCN" 
+                  />
+                </a>
+                
+                <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer">
+                  <img 
+                    src={nottsWestLogo} 
+                    alt="Nottingham West PCN" 
+                    className="h-6 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply" 
+                    title="Nottingham West PCN" 
+                  />
+                </a>
+            </div>
+
+            <button onClick={() => setShowAbout(!showAbout)} className="text-sm font-medium text-slate-500 hover:text-blue-600 transition">
+                About
+            </button>
           </div>
         </div>
       </header>
@@ -97,7 +171,7 @@ function App() {
       {/* --- MAIN CONTENT --- */}
       <main className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* LEFT COLUMN: INPUTS (lg:col-span-7) */}
+        {/* LEFT COLUMN: INPUTS */}
         <div className="lg:col-span-7 space-y-6">
           
           {/* Input Card */}
@@ -112,14 +186,12 @@ function App() {
                 if (e.target.value) setErrorMessage("");
               }}
             />
-            
             <div className="flex justify-between items-center mt-3 text-sm text-slate-500">
               <span>{text.length} chars</span>
               <span className={`font-medium ${getFragmentColor(getFragmentCount(text.length))}`}>
                 {getFragmentCount(text.length)} SMS Fragment{getFragmentCount(text.length) !== 1 && 's'}
               </span>
             </div>
-            
             {errorMessage && (
               <div className="mt-3 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100 flex items-center gap-2">
                 <span>🚨</span> {errorMessage}
@@ -129,7 +201,6 @@ function App() {
 
           {/* Settings Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Target Limit</label>
               <select 
@@ -177,7 +248,6 @@ function App() {
                 Automatically shorten URLs using <strong>is.gd</strong>
               </label>
             </div>
-
           </div>
 
           {/* Action Button */}
@@ -192,31 +262,23 @@ function App() {
           >
             {loading ? "Optimising..." : "Shorten Message ✨"}
           </button>
-
         </div>
 
 
-        {/* RIGHT COLUMN: RESULTS & PREVIEW (lg:col-span-5) */}
+        {/* RIGHT COLUMN: RESULTS */}
         <div className="lg:col-span-5 space-y-6">
             
             {/* PHONE PREVIEW */}
             <div className="bg-white rounded-[2rem] shadow-xl border-4 border-slate-800 overflow-hidden relative min-h-[400px]">
-              {/* Notch/Header */}
               <div className="bg-slate-100 h-12 border-b border-slate-200 flex items-center justify-center">
                  <div className="w-16 h-4 bg-slate-300 rounded-full opacity-50"></div>
               </div>
-
-              {/* Chat Area */}
               <div className="p-4 bg-slate-50 h-full flex flex-col gap-4 min-h-[300px]">
                 <div className="text-center text-xs text-slate-400 my-2">Today 10:23 AM</div>
-                
-                {/* The Message Bubble */}
                 <div className={`self-end max-w-[85%] p-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed shadow-sm transition-all duration-500
                   ${response ? "bg-blue-500 text-white" : "bg-slate-200 text-slate-400 italic"}`}>
                   {response ? response.shortened_text : "Your shortened message will appear here..."}
                 </div>
-                
-                {/* Meta Data under bubble */}
                 {response && (
                   <div className="self-end text-xs text-slate-500 pr-1 animate-fade-in">
                      Sent • {response.shortened_length} chars
@@ -246,18 +308,26 @@ function App() {
                     </div>
                 </div>
                 
+                {/* COPY BUTTON */}
                 <button 
                   onClick={handleCopy}
-                  className={`w-full py-2 rounded-lg font-semibold text-sm transition-colors
+                  className={`w-full py-3 rounded-xl font-bold text-lg shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center gap-2
                     ${copied 
-                      ? "bg-emerald-600 text-white" 
-                      : "bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                      ? "bg-emerald-700 text-white ring-2 ring-emerald-200" 
+                      : "bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-emerald-200"
                     }`}
                 >
-                  {copied ? "Copied to Clipboard!" : "Copy Text"}
+                  {copied ? (
+                    <><span>✅</span> Copied!</>
+                  ) : (
+                    <><span>📋</span> Copy Text</>
+                  )}
                 </button>
               </div>
             )}
+
+            {/* SAVINGS BOX (Only shows if money saved) */}
+            {renderSavings()}
 
             {/* DISCLAIMER TOGGLE */}
             <div className="text-center">
@@ -272,11 +342,10 @@ function App() {
                     </div>
                 )}
             </div>
-
         </div>
       </main>
 
-      {/* ABOUT MODAL (Simple Overlay) */}
+      {/* ABOUT MODAL */}
       {showAbout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAbout(false)}>
           <div className="bg-white max-w-lg w-full rounded-2xl p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -292,7 +361,6 @@ function App() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
