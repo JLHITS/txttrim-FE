@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ReactGA from "react-ga4";
+import QRCode from "react-qr-code"; // <--- NEW IMPORT
 
 // --- ASSETS ---
 import logo from "./assets/logo.png"; 
@@ -73,6 +74,7 @@ function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showQR, setShowQR] = useState(false); // <--- NEW STATE
   const [history, setHistory] = useState([]);
 
   // --- EFFECTS ---
@@ -257,7 +259,7 @@ function App() {
             <img 
               src={darkMode ? logoInv : logo} 
               alt="TxtTrim" 
-              className="h-16 w-16 object-contain" // Increased Logo Size
+              className="h-16 w-16 object-contain" 
             />
             <div className="flex flex-col">
               <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">TxtTrim</h1>
@@ -271,23 +273,10 @@ function App() {
             <button onClick={() => setDarkMode(!darkMode)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition" title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>{darkMode ? "☀️" : "🌙"}</button>
             <button onClick={() => setShowAbout(!showAbout)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition" title="About TxtTrim"><span className="text-lg">ℹ️</span></button>
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block"></div>
-            {/* 4. MADE IN BADGE (Far Right) */}
             <div className="hidden sm:flex items-center gap-3 bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 shadow-sm">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Made in</span>
-                <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer">
-                  <img 
-                    src={rushcliffeLogo} 
-                    alt="Rushcliffe PCN" 
-                    className="h-9 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" 
-                  />
-                </a>
-                <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer">
-                  <img 
-                    src={nottsWestLogo} 
-                    alt="Nottingham West PCN" 
-                    className="h-9 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" 
-                  />
-                </a>
+                <a href="https://www.rushcliffehealth.org" target="_blank" rel="noopener noreferrer"><img src={rushcliffeLogo} alt="Rushcliffe PCN" className="h-9 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" /></a>
+                <a href="https://www.nottinghamwestpcn.co.uk" target="_blank" rel="noopener noreferrer"><img src={nottsWestLogo} alt="Nottingham West PCN" className="h-9 w-auto grayscale hover:grayscale-0 transition-all duration-300 opacity-80 hover:opacity-100 mix-blend-multiply dark:mix-blend-normal dark:brightness-125" /></a>
             </div>
           </div>
         </div>
@@ -403,8 +392,12 @@ function App() {
                 
                 {/* READING AGE + SIMPLIFY BUTTON */}
                 {renderReadingAge()}
-
-                <button onClick={handleCopy} className={`w-full mt-4 py-3 rounded-xl font-bold text-lg shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${copied ? "bg-emerald-700 text-white ring-2 ring-emerald-200" : "bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-emerald-200"}`}>{copied ? <><span>✅</span> Copied!</> : <><span>📋</span> Copy Text</>}</button>
+                
+                <div className="flex gap-3 mt-4">
+                  <button onClick={handleCopy} className={`flex-1 py-3 rounded-xl font-bold text-lg shadow-sm transition-all transform active:scale-[0.98] flex items-center justify-center gap-2 ${copied ? "bg-emerald-700 text-white ring-2 ring-emerald-200" : "bg-emerald-500 hover:bg-emerald-600 text-white hover:shadow-emerald-200"}`}>{copied ? <><span>✅</span> Copied!</> : <><span>📋</span> Copy</>}</button>
+                  {/* MOBILE PREVIEW BUTTON */}
+                  <button onClick={() => setShowQR(true)} className="px-5 py-3 rounded-xl bg-slate-800 dark:bg-slate-700 text-white font-bold shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600 transition" title="Test on Phone"><span className="text-lg">📱</span></button>
+                </div>
               </div>
             )}
 
@@ -434,6 +427,27 @@ function App() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* --- QR CODE MODAL --- */}
+      {showQR && response && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowQR(false)}>
+          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center transform transition-all scale-100" onClick={e => e.stopPropagation()}>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Test on Device</h2>
+            <p className="text-slate-500 text-sm mb-6">Scan to open in WhatsApp</p>
+            
+            <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block">
+              <QRCode 
+                value={`https://wa.me/?text=${encodeURIComponent(response.shortened_text)}`}
+                size={200}
+                fgColor="#1e293b"
+              />
+            </div>
+            
+            <p className="mt-6 text-xs text-slate-400">Works with iOS & Android Camera</p>
+            <button onClick={() => setShowQR(false)} className="mt-6 w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold transition">Close</button>
           </div>
         </div>
       )}
