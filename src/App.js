@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import ReactGA from "react-ga4";
+import posthog from 'posthog-js'; // <--- NEW: PostHog Import
 import QRCode from "react-qr-code"; 
 
 // --- ASSETS ---
@@ -10,7 +10,6 @@ import nottsWestLogo from "./assets/nottinghamwestpcn.png";
 
 // --- CONFIG ---
 const API_BASE_URL = "https://txttrim-backend.onrender.com";
-const TRACKING_ID = "G-KKM0XZD821";
 const COST_PER_FRAGMENT = 0.022; 
 
 // --- TEMPLATES DATA ---
@@ -84,8 +83,14 @@ function App() {
 
   // --- EFFECTS ---
   useEffect(() => {
-    ReactGA.initialize(TRACKING_ID);
-    ReactGA.send("pageview");
+    // --- NEW: POSTHOG INIT ---
+    posthog.init('phc_FbHQoWVTN5sgsa1OBu6WUdFJ2Mcgq9FgRn1msSO0FgM', {
+        api_host: 'https://us.i.posthog.com',
+        person_profiles: 'identified_only', 
+        session_recording: {
+            maskAllInputs: true, // IMPORTANT: Keeps patient data safe in replays
+        }
+    });
     
     const storedSector = localStorage.getItem("preferredSector");
     const storedMaxChars = localStorage.getItem("preferredMaxChars");
@@ -121,6 +126,7 @@ function App() {
     setText(item.original);
     setResponse(item.response);
     setShowHistory(false);
+    posthog.capture('history_loaded'); // Track usage
   };
 
   const handleShorten = async (overrideParams = {}) => {
@@ -142,7 +148,13 @@ function App() {
     if (overrideParams.business_sector) setBusinessSector(overrideParams.business_sector);
     if (overrideParams.target_language) setTargetLanguage(overrideParams.target_language);
 
-    ReactGA.event({ category: "User", action: "Clicked Shorten", label: "Shorten Attempt" });
+    // --- NEW: POSTHOG TRACKING ---
+    posthog.capture('clicked_shorten', {
+      sector: sectorToUse,
+      language: langToUse,
+      limit: charsToUse,
+      has_signature: !!signature
+    });
 
     // Calculate available chars for AI (Total limit - Signature length)
     const sigLength = signature ? signature.length + 1 : 0; 
@@ -181,6 +193,7 @@ function App() {
     } catch (error) {
       console.error("Error:", error);
       setErrorMessage("Connection error. Please try again.");
+      posthog.capture('error_shorten', { message: error.message });
     }
     setLoading(false);
   };
@@ -192,18 +205,28 @@ function App() {
       setErrorMessage("⚠️ Maximum brevity reached.");
       return;
     }
+    posthog.capture('refine_shorter');
     const newLimit = Math.max(40, response.shortened_length - 20);
     handleShorten({ max_chars: newLimit });
   };
-  const refinePolite = () => handleShorten({ business_sector: "Healthcare" });
-  const refineFormal = () => handleShorten({ business_sector: "Legal" });
-  const refineSimple = () => handleShorten({ business_sector: "Plain English (Simple)" });
+  const refinePolite = () => {
+    posthog.capture('refine_polite');
+    handleShorten({ business_sector: "Healthcare" });
+  };
+  const refineFormal = () => {
+    posthog.capture('refine_formal');
+    handleShorten({ business_sector: "Legal" });
+  };
+  const refineSimple = () => {
+    posthog.capture('refine_simple');
+    handleShorten({ business_sector: "Plain English (Simple)" });
+  };
 
   const handleCopy = () => {
     if (response?.shortened_text) {
       navigator.clipboard.writeText(response.shortened_text);
       setCopied(true);
-      ReactGA.event({ category: "User", action: "Copied SMS", label: "Clipboard Copy" });
+      posthog.capture('copied_text'); // Track copy
       setTimeout(() => setCopied(false), 2000);
     }
   };
