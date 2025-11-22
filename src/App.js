@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import posthog from 'posthog-js'; // <--- NEW: PostHog Import
+import posthog from 'posthog-js'; 
 import QRCode from "react-qr-code"; 
 
 // --- ASSETS ---
@@ -83,14 +83,7 @@ function App() {
 
   // --- EFFECTS ---
   useEffect(() => {
-    // --- NEW: POSTHOG INIT ---
-    posthog.init('phc_FbHQoWVTN5sgsa1OBu6WUdFJ2Mcgq9FgRn1msSO0FgM', {
-        api_host: 'https://us.i.posthog.com',
-        person_profiles: 'identified_only', 
-        session_recording: {
-            maskAllInputs: true, // IMPORTANT: Keeps patient data safe in replays
-        }
-    });
+    // --- POSTHOG INIT REMOVED (Handled in index.js) ---
     
     const storedSector = localStorage.getItem("preferredSector");
     const storedMaxChars = localStorage.getItem("preferredMaxChars");
@@ -148,7 +141,7 @@ function App() {
     if (overrideParams.business_sector) setBusinessSector(overrideParams.business_sector);
     if (overrideParams.target_language) setTargetLanguage(overrideParams.target_language);
 
-    // --- NEW: POSTHOG TRACKING ---
+    // --- POSTHOG TRACKING ---
     posthog.capture('clicked_shorten', {
       sector: sectorToUse,
       language: langToUse,
