@@ -233,8 +233,8 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
     throw new Error("Not enough time left for AI call");
   }
 
-  const estimatedTokens = Math.ceil(maxChars / 3) + 40;
-  const maxOutputTokens = Math.max(64, Math.min(Math.ceil(estimatedTokens + OUTPUT_TOKEN_BUFFER / 3), 700));
+  const estimatedVisibleTokens = Math.ceil(maxChars / 3) + 30;
+  const maxOutputTokens = Math.max(220, Math.min(estimatedVisibleTokens + 260, 900));
   const requestOptions = { timeout: primaryTimeoutMs, maxRetries: 0 };
 
   try {
@@ -245,6 +245,8 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
         { role: "user", content: userPrompt },
       ],
       max_output_tokens: maxOutputTokens,
+      reasoning: { effort: "minimal" },
+      text: { verbosity: "low" },
     }, requestOptions);
 
     const text = extractTextFromResponses(responsesApiResult);
@@ -252,7 +254,11 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
       return { text, usage: responsesApiResult.usage };
     }
 
-    console.warn("Responses API returned empty text. Falling back to chat.completions.");
+    const outputTokens = responsesApiResult?.usage?.output_tokens ?? "n/a";
+    const reasoningTokens = responsesApiResult?.usage?.output_tokens_details?.reasoning_tokens ?? "n/a";
+    console.warn(
+      `Responses API returned empty text (output_tokens=${outputTokens}, reasoning_tokens=${reasoningTokens}, cap=${maxOutputTokens}). Falling back to chat.completions.`,
+    );
   } catch (e) {
     console.warn(`Responses API failed (${e.message}). Falling back to chat.completions.`);
   }
@@ -269,6 +275,7 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
       { role: "user", content: userPrompt },
     ],
     max_completion_tokens: maxOutputTokens,
+    reasoning_effort: "minimal",
   }, { timeout: fallbackTimeoutMs, maxRetries: 0 });
 
   return {
@@ -335,8 +342,12 @@ async function shortenWithRetries({
     totalTokens += getTokenCount(firstResult.usage);
 
     const candidate = sanitizeModelOutput(firstResult.text);
-    const assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
-    attempts.push({ text: candidate, ...assessment });
+    if (candidate) {
+      const assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
+      attempts.push({ text: candidate, ...assessment });
+    } else {
+      console.warn("Initial shorten attempt produced empty visible text.");
+    }
   } catch (e) {
     console.warn(`Initial shorten attempt failed: ${e.message}`);
   }
@@ -347,19 +358,21 @@ async function shortenWithRetries({
     }
 
     const latest = attempts[attempts.length - 1];
-    if (!latest) break;
-    if (latest.text && latest.withinLimit && latest.missingRequired.length === 0) {
+    if (latest?.text && latest.withinLimit && latest.missingRequired.length === 0) {
       break;
     }
 
+    const currentDraft = latest?.text || normalizeWhitespace(originalText);
+    const missingRequired = findMissingRequiredTokens(currentDraft, requiredTokens);
+
     const revisionPrompts = buildRevisionPrompts({
       originalText,
-      currentDraft: latest.text,
+      currentDraft,
       maxChars,
       targetLanguage,
       businessSector,
       requiredTokens,
-      missingRequired: latest.missingRequired,
+      missingRequired,
     });
 
     try {
@@ -372,8 +385,12 @@ async function shortenWithRetries({
 
       totalTokens += getTokenCount(revisionResult.usage);
       const candidate = sanitizeModelOutput(revisionResult.text);
-      const assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
-      attempts.push({ text: candidate, ...assessment });
+      if (candidate) {
+        const assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
+        attempts.push({ text: candidate, ...assessment });
+      } else {
+        console.warn(`Revision attempt ${i + 1} produced empty visible text.`);
+      }
     } catch (e) {
       console.warn(`Revision attempt ${i + 1} failed: ${e.message}`);
       break;
