@@ -12,7 +12,7 @@ export function Header({
 }) {
   return (
     <header className="w-full bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 shadow-sm sticky top-0 z-20 transition-colors">
-      <div className="max-w-3xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0">
+      <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0">
         {/* Logo & Title */}
         <div className="flex items-center gap-4">
           <img
@@ -32,29 +32,44 @@ export function Header({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onShowHistory}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition text-slate-600 dark:text-slate-200"
+            className="group relative h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 hover:border-nhs-blue dark:hover:border-nhs-light-blue hover:shadow-sm transition-all text-slate-500 dark:text-slate-300 hover:text-nhs-blue dark:hover:text-nhs-light-blue"
             aria-label="View history"
           >
-            <span className="text-lg">📜</span>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs font-medium hidden md:inline">History</span>
           </button>
           <button
             onClick={onToggleDark}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+            className="group relative h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 hover:border-nhs-blue dark:hover:border-nhs-light-blue hover:shadow-sm transition-all text-slate-500 dark:text-slate-300 hover:text-nhs-blue dark:hover:text-nhs-light-blue"
             aria-label={
               darkMode ? "Switch to light mode" : "Switch to dark mode"
             }
           >
-            {darkMode ? "☀️" : "🌙"}
+            {darkMode ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+            <span className="text-xs font-medium hidden md:inline">{darkMode ? "Light" : "Dark"}</span>
           </button>
           <button
             onClick={onShowAbout}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+            className="group relative h-9 px-3 flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 hover:border-nhs-blue dark:hover:border-nhs-light-blue hover:shadow-sm transition-all text-slate-500 dark:text-slate-300 hover:text-nhs-blue dark:hover:text-nhs-light-blue"
             aria-label="About TxtTrim"
           >
-            <span className="text-lg">ℹ️</span>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs font-medium hidden md:inline">About</span>
           </button>
 
           <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 hidden sm:block" />

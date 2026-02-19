@@ -6,9 +6,6 @@ export function ResultsCard({
   copied,
   onCopy,
   onShowQR,
-  onRefineShorter,
-  onRefinePolite,
-  onRefineFormal,
   onSimplify,
 }) {
   if (!response) return null;
@@ -36,32 +33,6 @@ export function ResultsCard({
             Sent &bull; {response.shortened_length} chars
           </div>
 
-          {/* Quick Refine */}
-          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-[9px] uppercase font-bold text-slate-400 text-center mb-2 tracking-widest">
-              Quick Refine
-            </p>
-            <div className="flex gap-2 justify-center overflow-x-auto pb-1 hide-scrollbar">
-              <button
-                onClick={onRefineShorter}
-                className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-              >
-                Shorter
-              </button>
-              <button
-                onClick={onRefinePolite}
-                className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-              >
-                Polite
-              </button>
-              <button
-                onClick={onRefineFormal}
-                className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-200 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
-              >
-                Formal
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 

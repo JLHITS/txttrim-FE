@@ -77,26 +77,6 @@ function App() {
     return () => document.removeEventListener("keydown", handleKey);
   }, [triggerShorten, handleCopy]);
 
-  const refineShorter = () => {
-    if (!response) return;
-    if (response.shortened_length <= 50) {
-      setErrorMessage("Maximum brevity reached.");
-      return;
-    }
-    track("refine_shorter");
-    triggerShorten({ maxChars: Math.max(40, response.shortened_length - 20) });
-  };
-
-  const refinePolite = () => {
-    track("refine_polite");
-    triggerShorten({ businessSector: "Healthcare" });
-  };
-
-  const refineFormal = () => {
-    track("refine_formal");
-    triggerShorten({ businessSector: "Legal" });
-  };
-
   const refineSimple = () => {
     track("refine_simple");
     triggerShorten({ businessSector: "Plain English (Simple)" });
@@ -129,7 +109,7 @@ function App() {
         onShowAbout={() => setShowAbout(!showAbout)}
       />
 
-      <main id="main-content" className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         <MessageInput
           text={text}
           onTextChange={setText}
@@ -163,9 +143,6 @@ function App() {
           copied={copied}
           onCopy={handleCopy}
           onShowQR={() => setShowQR(true)}
-          onRefineShorter={refineShorter}
-          onRefinePolite={refinePolite}
-          onRefineFormal={refineFormal}
           onSimplify={refineSimple}
         />
 
