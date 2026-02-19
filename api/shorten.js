@@ -5,13 +5,13 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
 const OUTPUT_TOKEN_BUFFER = 180;
-const MAX_REWRITE_ATTEMPTS = 3;
-const REQUEST_TIME_BUDGET_MS = 14000;
-const MIN_REMAINING_FOR_ATTEMPT_MS = 1800;
-const MIN_CALL_TIMEOUT_MS = 700;
-const URL_SHORTENER_TIMEOUT_MS = 1500;
-const AI_CALL_TIMEOUT_MS = 10500;
-const MAX_URLS_TO_SHORTEN = 6;
+const MAX_REWRITE_ATTEMPTS = 1;
+const REQUEST_TIME_BUDGET_MS = 9000;
+const MIN_REMAINING_FOR_ATTEMPT_MS = 1200;
+const MIN_CALL_TIMEOUT_MS = 500;
+const URL_SHORTENER_TIMEOUT_MS = 800;
+const AI_CALL_TIMEOUT_MS = 5000;
+const MAX_URLS_TO_SHORTEN = 3;
 const URL_PATTERN = /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"'`]*)?/gi;
 const PLACEHOLDER_PATTERN = /\[[^\]\r\n]+\]/g;
 const PHONE_OR_LONG_NUMBER_PATTERN = /\b(?:\+?\d[\d\s().-]{6,}\d)\b/g;
@@ -263,21 +263,6 @@ function extractTextFromChatCompletion(response) {
   return extractTextFromContentParts(content);
 }
 
-function extractTextFromResponses(response) {
-  if (typeof response?.output_text === "string" && response.output_text.trim()) {
-    return response.output_text.trim();
-  }
-
-  if (!Array.isArray(response?.output)) return "";
-
-  const combined = response.output
-    .filter((item) => item?.type === "message")
-    .map((item) => extractTextFromContentParts(item?.content))
-    .join("")
-    .trim();
-
-  return combined;
-}
 
 function getTokenCount(usage) {
   if (!usage) return 0;
@@ -295,45 +280,13 @@ function formatTokenCount(totalTokens) {
 }
 
 async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs) {
-  const primaryTimeoutMs = getCallTimeoutMs(deadlineTs, AI_CALL_TIMEOUT_MS);
-  if (!primaryTimeoutMs) {
+  const timeoutMs = getCallTimeoutMs(deadlineTs, AI_CALL_TIMEOUT_MS);
+  if (!timeoutMs) {
     throw new Error("Not enough time left for AI call");
   }
 
   const estimatedVisibleTokens = Math.ceil(maxChars / 3) + 30;
-  const maxOutputTokens = Math.max(600, Math.min(estimatedVisibleTokens + 900, 2200));
-  const requestOptions = { timeout: primaryTimeoutMs, maxRetries: 0 };
-
-  try {
-    const responsesApiResult = await client.responses.create({
-      model: OPENAI_MODEL,
-      input: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_output_tokens: maxOutputTokens,
-      reasoning: { effort: "minimal" },
-      text: { verbosity: "low" },
-    }, requestOptions);
-
-    const text = extractTextFromResponses(responsesApiResult);
-    if (text) {
-      return { text, usage: responsesApiResult.usage };
-    }
-
-    const outputTokens = responsesApiResult?.usage?.output_tokens ?? "n/a";
-    const reasoningTokens = responsesApiResult?.usage?.output_tokens_details?.reasoning_tokens ?? "n/a";
-    console.warn(
-      `Responses API returned empty text (output_tokens=${outputTokens}, reasoning_tokens=${reasoningTokens}, cap=${maxOutputTokens}). Falling back to chat.completions.`,
-    );
-  } catch (e) {
-    console.warn(`Responses API failed (${e.message}). Falling back to chat.completions.`);
-  }
-
-  const fallbackTimeoutMs = getCallTimeoutMs(deadlineTs, Math.min(AI_CALL_TIMEOUT_MS, primaryTimeoutMs));
-  if (!fallbackTimeoutMs) {
-    throw new Error("Not enough time left for chat fallback");
-  }
+  const maxOutputTokens = Math.max(400, Math.min(estimatedVisibleTokens + 600, 1200));
 
   const chatResult = await client.chat.completions.create({
     model: OPENAI_MODEL,
@@ -342,8 +295,8 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
       { role: "user", content: userPrompt },
     ],
     max_completion_tokens: maxOutputTokens,
-    reasoning_effort: "minimal",
-  }, { timeout: fallbackTimeoutMs, maxRetries: 0 });
+    reasoning_effort: "low",
+  }, { timeout: timeoutMs, maxRetries: 0 });
 
   return {
     text: extractTextFromChatCompletion(chatResult),
