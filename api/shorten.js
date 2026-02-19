@@ -437,36 +437,29 @@ export default async function handler(req, res) {
   }
 
   const requiredTokens = extractRequiredTokens(processedText, protectVariables);
-  const requiredTokensRule = requiredTokens.length
-    ? `Required tokens (must appear exactly): ${requiredTokens.join(" | ")}`
-    : "Keep key facts: who, what, when, where, action needed, and contact details.";
 
-  // --- PROMPT ENGINEERING ---
+  // --- PROMPT ENGINEERING (Legacy Python-style) ---
+  const role = "You are a precise SMS message shortener and translator.";
   const protection = protectVariables
     ? "CRITICAL: Do NOT change, delete, or translate any text inside [square brackets] (e.g. [Date]). Keep them exactly as is."
-    : "You may rewrite freely, but preserve the message intent and critical facts.";
+    : "";
 
   const task =
     targetLanguage && targetLanguage !== "English"
-      ? `Task: Translate the message to ${targetLanguage} FIRST, then shorten to ${maxChars} characters or fewer.`
-      : `Task: Shorten the message in English to ${maxChars} characters or fewer.`;
+      ? `Task: Translate the message to ${targetLanguage} FIRST, and THEN shorten the translated text to under ${maxChars} characters.`
+      : `Task: Shorten the message to under ${maxChars} characters in English.`;
 
-  const systemPrompt = `You are a precise SMS message shortener and translator.
-${task}
+  const systemPrompt = role;
+  const initialUserPrompt = `${task}
 
 Rules:
-- Maintain the original meaning and intent.
+- Maintain the original meaning.
 - Tone: ${businessSector}.
 - ${protection}
 - If multiple links exist, keep them all.
-- ${requiredTokensRule}
-- Do NOT output chopped, cut-off, or half-finished text.
-- Provide ONLY the final SMS text. No intro/outro.`;
+- Provide ONLY the final SMS text. No intro/outro.
 
-  const initialUserPrompt = `Original message:
-${processedText}
-
-Target maximum length: ${maxChars} characters.`;
+Message to process: ${processedText}`;
 
   try {
     const optimization = await shortenWithRetries({
