@@ -292,7 +292,7 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
     instructions: systemPrompt,
     input: userPrompt,
     max_output_tokens: maxOutputTokens,
-    reasoning: { effort: "none" },
+    reasoning: { effort: "minimal" },
     text: { verbosity: "low" },
   }, { timeout: timeoutMs, maxRetries: 0 });
 
