@@ -206,10 +206,25 @@ function App() {
           target_language: langToUse
         }),
       });
-      const data = await res.json();
+
+      const rawBody = await res.text();
+      let data = {};
+      try {
+        data = rawBody ? JSON.parse(rawBody) : {};
+      } catch (parseError) {
+        if (!res.ok) {
+          throw new Error(`Server error (${res.status}). Please try again.`);
+        }
+        throw new Error("Server returned an invalid response.");
+      }
+
+      if (!res.ok) {
+        const serverError = data?.error || `Server error (${res.status}).`;
+        throw new Error(serverError);
+      }
       
       // Append Signature locally
-      if (signature) {
+      if (signature && typeof data.shortened_text === "string") {
         data.shortened_text = `${data.shortened_text} ${signature}`;
         data.shortened_length = data.shortened_text.length;
       }
@@ -225,7 +240,11 @@ function App() {
 
     } catch (error) {
       console.error("Error:", error);
-      setErrorMessage("Connection error. Please try again.");
+      if ((error.message || "").includes("504")) {
+        setErrorMessage("The server timed out. Please retry once or reduce message length.");
+      } else {
+        setErrorMessage(error.message || "Connection error. Please try again.");
+      }
       posthog.capture('error_shorten', { message: error.message });
     }
     setLoading(false);

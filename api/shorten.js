@@ -5,7 +5,13 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
 const OUTPUT_TOKEN_BUFFER = 180;
-const MAX_REWRITE_ATTEMPTS = 3;
+const MAX_REWRITE_ATTEMPTS = 2;
+const REQUEST_TIME_BUDGET_MS = 12500;
+const MIN_REMAINING_FOR_ATTEMPT_MS = 2200;
+const MIN_CALL_TIMEOUT_MS = 700;
+const URL_SHORTENER_TIMEOUT_MS = 1500;
+const AI_CALL_TIMEOUT_MS = 6500;
+const MAX_URLS_TO_SHORTEN = 6;
 const URL_PATTERN = /https?:\/\/[^\s\]\)>,;]+/g;
 const PLACEHOLDER_PATTERN = /\[[^\]\r\n]+\]/g;
 const PHONE_OR_LONG_NUMBER_PATTERN = /\b(?:\+?\d[\d\s().-]{6,}\d)\b/g;
@@ -20,12 +26,25 @@ function toBool(value, defaultVal = true) {
   return value != null ? Boolean(value) : defaultVal;
 }
 
-async function shortenWithIsgd(url) {
+function remainingMs(deadlineTs) {
+  return Math.max(0, deadlineTs - Date.now());
+}
+
+function getCallTimeoutMs(deadlineTs, preferredMs) {
+  const remaining = remainingMs(deadlineTs) - 250;
+  if (remaining < MIN_CALL_TIMEOUT_MS) return 0;
+  return Math.max(MIN_CALL_TIMEOUT_MS, Math.min(preferredMs, remaining));
+}
+
+async function shortenWithIsgd(url, deadlineTs) {
+  const timeoutMs = getCallTimeoutMs(deadlineTs, URL_SHORTENER_TIMEOUT_MS);
+  if (!timeoutMs) return null;
+
   try {
     const encoded = encodeURIComponent(url);
     const res = await fetch(`${ISGD_API}${encoded}`, {
       headers: { "User-Agent": "TxtTrim/1.0" },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (res.ok) {
       const text = await res.text();
@@ -37,19 +56,42 @@ async function shortenWithIsgd(url) {
   return null;
 }
 
-async function shortenUrlsInText(text) {
+async function shortenUrlsInText(text, deadlineTs) {
   const urls = text.match(URL_PATTERN);
   if (!urls) return text;
+  if (remainingMs(deadlineTs) < MIN_REMAINING_FOR_ATTEMPT_MS) return text;
 
-  const cache = {};
-  for (const u of urls) {
-    const cleanUrl = u.replace(/[.,;!?]+$/, "");
-    if (!(cleanUrl in cache)) {
-      const short = await shortenWithIsgd(cleanUrl);
-      cache[u] = short || u;
-    }
+  const cleanedUrls = uniqueTokens(urls.map((u) => u.replace(/[.,;!?]+$/, ""))).slice(0, MAX_URLS_TO_SHORTEN);
+  if (!cleanedUrls.length) return text;
+
+  const shortenedByCleanUrl = {};
+  await Promise.all(
+    cleanedUrls.map(async (cleanUrl) => {
+      const short = await shortenWithIsgd(cleanUrl, deadlineTs);
+      shortenedByCleanUrl[cleanUrl] = short || cleanUrl;
+    }),
+  );
+
+  return text.replace(URL_PATTERN, (match) => {
+    const cleanMatch = match.replace(/[.,;!?]+$/, "");
+    return shortenedByCleanUrl[cleanMatch] || match;
+  });
+}
+
+function shortenTextFallback(processedText, maxChars) {
+  const normalized = normalizeWhitespace(processedText);
+  if (normalized.length <= maxChars) return normalized;
+
+  const words = normalized.split(" ");
+  let output = "";
+  for (const word of words) {
+    const next = output ? `${output} ${word}` : word;
+    if (next.length > maxChars) break;
+    output = next;
   }
-  return text.replace(URL_PATTERN, (match) => cache[match] || match);
+
+  if (output) return output;
+  return normalized.slice(0, maxChars).trim();
 }
 
 function smsFragments(length) {
@@ -201,8 +243,15 @@ function formatTokenCount(totalTokens) {
   return totalTokens > 0 ? totalTokens : "n/a";
 }
 
-async function generateModelText(systemPrompt, userPrompt, maxChars) {
-  const maxOutputTokens = Math.max(64, Math.min(maxChars + OUTPUT_TOKEN_BUFFER, 2200));
+async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs) {
+  const primaryTimeoutMs = getCallTimeoutMs(deadlineTs, AI_CALL_TIMEOUT_MS);
+  if (!primaryTimeoutMs) {
+    throw new Error("Not enough time left for AI call");
+  }
+
+  const estimatedTokens = Math.ceil(maxChars / 3) + 40;
+  const maxOutputTokens = Math.max(64, Math.min(Math.ceil(estimatedTokens + OUTPUT_TOKEN_BUFFER / 3), 700));
+  const requestOptions = { timeout: primaryTimeoutMs, maxRetries: 0 };
 
   try {
     const responsesApiResult = await client.responses.create({
@@ -212,7 +261,7 @@ async function generateModelText(systemPrompt, userPrompt, maxChars) {
         { role: "user", content: userPrompt },
       ],
       max_output_tokens: maxOutputTokens,
-    });
+    }, requestOptions);
 
     const text = extractTextFromResponses(responsesApiResult);
     if (text) {
@@ -224,6 +273,11 @@ async function generateModelText(systemPrompt, userPrompt, maxChars) {
     console.warn(`Responses API failed (${e.message}). Falling back to chat.completions.`);
   }
 
+  const fallbackTimeoutMs = getCallTimeoutMs(deadlineTs, Math.min(AI_CALL_TIMEOUT_MS, primaryTimeoutMs));
+  if (!fallbackTimeoutMs) {
+    throw new Error("Not enough time left for chat fallback");
+  }
+
   const chatResult = await client.chat.completions.create({
     model: OPENAI_MODEL,
     messages: [
@@ -231,7 +285,7 @@ async function generateModelText(systemPrompt, userPrompt, maxChars) {
       { role: "user", content: userPrompt },
     ],
     max_completion_tokens: maxOutputTokens,
-  });
+  }, { timeout: fallbackTimeoutMs, maxRetries: 0 });
 
   return {
     text: extractTextFromChatCompletion(chatResult),
@@ -273,7 +327,7 @@ ${currentDraft || "[empty draft]"}
 
 Required tokens (must appear exactly):
 ${requiredTokensBlock}${missingBlock}
-Rewrite now and keep the final text at or under ${maxChars} characters if possible.`;
+Rewrite now and keep the final text at or under ${maxChars} characters.`;
 
   return { systemPrompt, userPrompt };
 }
@@ -286,19 +340,30 @@ async function shortenWithRetries({
   targetLanguage,
   businessSector,
   requiredTokens,
+  deadlineTs,
+  maxRewriteAttempts,
 }) {
   const attempts = [];
   let totalTokens = 0;
 
-  const firstResult = await generateModelText(initialSystemPrompt, initialUserPrompt, maxChars);
-  totalTokens += getTokenCount(firstResult.usage);
+  try {
+    const firstResult = await generateModelText(initialSystemPrompt, initialUserPrompt, maxChars, deadlineTs);
+    totalTokens += getTokenCount(firstResult.usage);
 
-  let candidate = sanitizeModelOutput(firstResult.text);
-  let assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
-  attempts.push({ text: candidate, ...assessment });
+    const candidate = sanitizeModelOutput(firstResult.text);
+    const assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
+    attempts.push({ text: candidate, ...assessment });
+  } catch (e) {
+    console.warn(`Initial shorten attempt failed: ${e.message}`);
+  }
 
-  for (let i = 0; i < MAX_REWRITE_ATTEMPTS; i += 1) {
+  for (let i = 0; i < maxRewriteAttempts; i += 1) {
+    if (remainingMs(deadlineTs) < MIN_REMAINING_FOR_ATTEMPT_MS) {
+      break;
+    }
+
     const latest = attempts[attempts.length - 1];
+    if (!latest) break;
     if (latest.text && latest.withinLimit && latest.missingRequired.length === 0) {
       break;
     }
@@ -313,16 +378,22 @@ async function shortenWithRetries({
       missingRequired: latest.missingRequired,
     });
 
-    const revisionResult = await generateModelText(
-      revisionPrompts.systemPrompt,
-      revisionPrompts.userPrompt,
-      maxChars,
-    );
+    try {
+      const revisionResult = await generateModelText(
+        revisionPrompts.systemPrompt,
+        revisionPrompts.userPrompt,
+        maxChars,
+        deadlineTs,
+      );
 
-    totalTokens += getTokenCount(revisionResult.usage);
-    candidate = sanitizeModelOutput(revisionResult.text);
-    assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
-    attempts.push({ text: candidate, ...assessment });
+      totalTokens += getTokenCount(revisionResult.usage);
+      const candidate = sanitizeModelOutput(revisionResult.text);
+      const assessment = evaluateAttempt(candidate, maxChars, requiredTokens);
+      attempts.push({ text: candidate, ...assessment });
+    } catch (e) {
+      console.warn(`Revision attempt ${i + 1} failed: ${e.message}`);
+      break;
+    }
   }
 
   const bestAttempt = pickBestAttempt(attempts);
@@ -336,6 +407,7 @@ export default async function handler(req, res) {
   }
 
   const startTime = Date.now();
+  const deadlineTs = startTime + REQUEST_TIME_BUDGET_MS;
   const data = req.body || {};
   const originalText = data.text || "";
 
@@ -361,7 +433,7 @@ export default async function handler(req, res) {
   // --- URL SHORTENING ---
   let processedText = originalText;
   if (doShortenUrls) {
-    processedText = await shortenUrlsInText(processedText);
+    processedText = await shortenUrlsInText(processedText, deadlineTs);
   }
 
   const requiredTokens = extractRequiredTokens(processedText, protectVariables);
@@ -405,12 +477,14 @@ Target maximum length: ${maxChars} characters.`;
       targetLanguage,
       businessSector,
       requiredTokens,
+      deadlineTs,
+      maxRewriteAttempts: MAX_REWRITE_ATTEMPTS,
     });
 
     let shortenedText = optimization.bestAttempt?.text || "";
     if (!shortenedText) {
-      shortenedText = normalizeWhitespace(processedText);
-      console.warn("Model returned empty text after retries. Using full processed input fallback.");
+      shortenedText = shortenTextFallback(processedText, maxChars);
+      console.warn("Model returned empty text after retries. Using safe fallback.");
     }
 
     const missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
