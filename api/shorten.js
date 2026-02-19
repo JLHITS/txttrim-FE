@@ -5,12 +5,12 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
 const OUTPUT_TOKEN_BUFFER = 180;
-const MAX_REWRITE_ATTEMPTS = 2;
-const REQUEST_TIME_BUDGET_MS = 12500;
-const MIN_REMAINING_FOR_ATTEMPT_MS = 2200;
+const MAX_REWRITE_ATTEMPTS = 1;
+const REQUEST_TIME_BUDGET_MS = 14000;
+const MIN_REMAINING_FOR_ATTEMPT_MS = 1800;
 const MIN_CALL_TIMEOUT_MS = 700;
 const URL_SHORTENER_TIMEOUT_MS = 1500;
-const AI_CALL_TIMEOUT_MS = 6500;
+const AI_CALL_TIMEOUT_MS = 10500;
 const MAX_URLS_TO_SHORTEN = 6;
 const URL_PATTERN = /https?:\/\/[^\s\]\)>,;]+/g;
 const PLACEHOLDER_PATTERN = /\[[^\]\r\n]+\]/g;
@@ -76,22 +76,6 @@ async function shortenUrlsInText(text, deadlineTs) {
     const cleanMatch = match.replace(/[.,;!?]+$/, "");
     return shortenedByCleanUrl[cleanMatch] || match;
   });
-}
-
-function shortenTextFallback(processedText, maxChars) {
-  const normalized = normalizeWhitespace(processedText);
-  if (normalized.length <= maxChars) return normalized;
-
-  const words = normalized.split(" ");
-  let output = "";
-  for (const word of words) {
-    const next = output ? `${output} ${word}` : word;
-    if (next.length > maxChars) break;
-    output = next;
-  }
-
-  if (output) return output;
-  return normalized.slice(0, maxChars).trim();
 }
 
 function smsFragments(length) {
@@ -476,8 +460,17 @@ Message to process: ${processedText}`;
 
     let shortenedText = optimization.bestAttempt?.text || "";
     if (!shortenedText) {
-      shortenedText = shortenTextFallback(processedText, maxChars);
-      console.warn("Model returned empty text after retries. Using safe fallback.");
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.warn(
+        `No usable AI output | ${duration}s | Attempts:${optimization.attempts.length} | Returning timeout-style error instead of truncating.`,
+      );
+      return res.status(504).json({
+        error: "AI did not return a usable shortened message in time. Please retry.",
+        original_text: processedText,
+        original_length: processedText.length,
+        target_max_chars: maxChars,
+        rewrite_attempts: optimization.attempts.length,
+      });
     }
 
     const missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
