@@ -12,7 +12,7 @@ const MIN_CALL_TIMEOUT_MS = 700;
 const URL_SHORTENER_TIMEOUT_MS = 1500;
 const AI_CALL_TIMEOUT_MS = 10500;
 const MAX_URLS_TO_SHORTEN = 6;
-const URL_PATTERN = /https?:\/\/[^\s\]\)>,;]+/g;
+const URL_PATTERN = /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"'`]*)?/gi;
 const PLACEHOLDER_PATTERN = /\[[^\]\r\n]+\]/g;
 const PHONE_OR_LONG_NUMBER_PATTERN = /\b(?:\+?\d[\d\s().-]{6,}\d)\b/g;
 const DATE_TIME_PATTERN = /\b(?:\d{1,2}[:.]\d{2}(?:\s?[AaPp][Mm])?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/g;
@@ -36,6 +36,53 @@ function getCallTimeoutMs(deadlineTs, preferredMs) {
   return Math.max(MIN_CALL_TIMEOUT_MS, Math.min(preferredMs, remaining));
 }
 
+function getUrlRegex() {
+  return new RegExp(URL_PATTERN.source, "gi");
+}
+
+function splitTrailingPunctuation(value) {
+  const match = String(value || "").match(/^(.*?)([.,;!?)\]]*)$/);
+  if (!match) return { core: value, trailing: "" };
+  return {
+    core: match[1],
+    trailing: match[2] || "",
+  };
+}
+
+function normalizeUrlCandidate(candidate) {
+  const value = String(candidate || "").trim();
+  if (!value) return null;
+
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^www\./i.test(value)) return `https://${value}`;
+
+  // Bare domains like "practice.com/link"
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(value)) return `https://${value}`;
+
+  return null;
+}
+
+function extractUrlCandidates(text) {
+  const regex = getUrlRegex();
+  const raw = String(text || "");
+  const items = [];
+
+  for (const match of raw.matchAll(regex)) {
+    const token = match[0];
+    const index = match.index ?? -1;
+    if (index > 0 && raw[index - 1] === "@") {
+      continue;
+    }
+
+    const { core } = splitTrailingPunctuation(token);
+    const normalized = normalizeUrlCandidate(core);
+    if (!normalized) continue;
+    items.push({ token: core, normalized });
+  }
+
+  return items;
+}
+
 async function shortenWithIsgd(url, deadlineTs) {
   const timeoutMs = getCallTimeoutMs(deadlineTs, URL_SHORTENER_TIMEOUT_MS);
   if (!timeoutMs) return null;
@@ -57,24 +104,40 @@ async function shortenWithIsgd(url, deadlineTs) {
 }
 
 async function shortenUrlsInText(text, deadlineTs) {
-  const urls = text.match(URL_PATTERN);
-  if (!urls) return text;
+  const urlCandidates = extractUrlCandidates(text);
+  if (!urlCandidates.length) return text;
   if (remainingMs(deadlineTs) < MIN_REMAINING_FOR_ATTEMPT_MS) return text;
 
-  const cleanedUrls = uniqueTokens(urls.map((u) => u.replace(/[.,;!?]+$/, ""))).slice(0, MAX_URLS_TO_SHORTEN);
-  if (!cleanedUrls.length) return text;
+  const uniqueByNormalized = new Map();
+  for (const item of urlCandidates) {
+    const list = uniqueByNormalized.get(item.normalized) || [];
+    list.push(item.token);
+    uniqueByNormalized.set(item.normalized, list);
+  }
 
-  const shortenedByCleanUrl = {};
+  const normalizedLinks = Array.from(uniqueByNormalized.keys()).slice(0, MAX_URLS_TO_SHORTEN);
+  if (!normalizedLinks.length) return text;
+
+  const shortenedByToken = new Map();
   await Promise.all(
-    cleanedUrls.map(async (cleanUrl) => {
-      const short = await shortenWithIsgd(cleanUrl, deadlineTs);
-      shortenedByCleanUrl[cleanUrl] = short || cleanUrl;
+    normalizedLinks.map(async (normalizedUrl) => {
+      const short = await shortenWithIsgd(normalizedUrl, deadlineTs);
+      const tokens = uniqueByNormalized.get(normalizedUrl) || [];
+      for (const token of tokens) {
+        shortenedByToken.set(token, short || token);
+      }
     }),
   );
 
-  return text.replace(URL_PATTERN, (match) => {
-    const cleanMatch = match.replace(/[.,;!?]+$/, "");
-    return shortenedByCleanUrl[cleanMatch] || match;
+  return text.replace(getUrlRegex(), (match, offset, source) => {
+    if (typeof offset === "number" && offset > 0 && source[offset - 1] === "@") {
+      return match;
+    }
+
+    const { core, trailing } = splitTrailingPunctuation(match);
+    const short = shortenedByToken.get(core);
+    if (!short) return match;
+    return `${short}${trailing}`;
   });
 }
 
@@ -99,7 +162,7 @@ function uniqueTokens(items) {
 }
 
 function extractRequiredTokens(text, protectVariables) {
-  const urls = text.match(URL_PATTERN) || [];
+  const urls = uniqueTokens(extractUrlCandidates(text).map((item) => item.token));
   const placeholders = protectVariables ? text.match(PLACEHOLDER_PATTERN) || [] : [];
   const phoneOrLongNumbers = text.match(PHONE_OR_LONG_NUMBER_PATTERN) || [];
   const dateOrTime = text.match(DATE_TIME_PATTERN) || [];
