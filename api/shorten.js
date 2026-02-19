@@ -5,7 +5,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
 const OUTPUT_TOKEN_BUFFER = 180;
-const MAX_REWRITE_ATTEMPTS = 1;
+const MAX_REWRITE_ATTEMPTS = 2;
 const REQUEST_TIME_BUDGET_MS = 12000;
 const MIN_REMAINING_FOR_ATTEMPT_MS = 1500;
 const MIN_CALL_TIMEOUT_MS = 600;
@@ -139,6 +139,81 @@ async function shortenUrlsInText(text, deadlineTs) {
     if (!short) return match;
     return `${short}${trailing}`;
   });
+}
+
+function smartTrim(text, maxChars) {
+  if (text.length <= maxChars) return text;
+
+  let result = text;
+
+  // Step 1: Remove trailing punctuation (except those inside required tokens)
+  result = result.replace(/[.!]+$/, "").trim();
+  if (result.length <= maxChars) return result;
+
+  // Step 2: Common abbreviations
+  const abbrevs = [
+    [/\bappointment\b/gi, "appt"],
+    [/\bappointments\b/gi, "appts"],
+    [/\bplease\b/gi, "pls"],
+    [/\btelephone\b/gi, "tel"],
+    [/\bregarding\b/gi, "re"],
+    [/\binformation\b/gi, "info"],
+    [/\bavailable\b/gi, "avail"],
+    [/\bdepartment\b/gi, "dept"],
+    [/\bmanagement\b/gi, "mgmt"],
+    [/\breference\b/gi, "ref"],
+    [/\bconfirmation\b/gi, "conf"],
+    [/\bcancellation\b/gi, "cancellation"],
+    [/\bnumber\b/gi, "no"],
+    [/\bmonday\b/gi, "Mon"],
+    [/\btuesday\b/gi, "Tue"],
+    [/\bwednesday\b/gi, "Wed"],
+    [/\bthursday\b/gi, "Thu"],
+    [/\bfriday\b/gi, "Fri"],
+    [/\bsaturday\b/gi, "Sat"],
+    [/\bsunday\b/gi, "Sun"],
+    [/\bjanuary\b/gi, "Jan"],
+    [/\bfebruary\b/gi, "Feb"],
+    [/\bmarch\b/gi, "Mar"],
+    [/\bapril\b/gi, "Apr"],
+    [/\bjune\b/gi, "Jun"],
+    [/\bjuly\b/gi, "Jul"],
+    [/\baugust\b/gi, "Aug"],
+    [/\bseptember\b/gi, "Sep"],
+    [/\boctober\b/gi, "Oct"],
+    [/\bnovember\b/gi, "Nov"],
+    [/\bdecember\b/gi, "Dec"],
+    [/ and /gi, " & "],
+  ];
+  for (const [pattern, replacement] of abbrevs) {
+    if (result.length <= maxChars) break;
+    result = result.replace(pattern, replacement);
+  }
+  result = normalizeWhitespace(result);
+  if (result.length <= maxChars) return result;
+
+  // Step 3: Remove filler words
+  const fillers = [/\bjust\b/gi, /\balso\b/gi, /\bkindly\b/gi, /\bsimply\b/gi];
+  for (const filler of fillers) {
+    if (result.length <= maxChars) break;
+    result = result.replace(filler, "");
+    result = normalizeWhitespace(result);
+  }
+  if (result.length <= maxChars) return result;
+
+  // Step 4: Remove "the " where it's not critical
+  result = result.replace(/\bthe\s+/gi, "");
+  result = normalizeWhitespace(result);
+  if (result.length <= maxChars) return result;
+
+  // Step 5: Trim from end at word boundary as last resort
+  while (result.length > maxChars) {
+    const lastSpace = result.lastIndexOf(" ");
+    if (lastSpace <= 0) break;
+    result = result.slice(0, lastSpace).replace(/[,;:\s]+$/, "");
+  }
+
+  return result;
 }
 
 function smsFragments(length) {
@@ -303,7 +378,6 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
 }
 
 function buildStrictLimitPrompts({
-  originalText,
   currentDraft,
   maxChars,
   targetLanguage,
@@ -312,27 +386,26 @@ function buildStrictLimitPrompts({
 }) {
   const requiredTokensBlock = formatRequiredTokens(requiredTokens);
 
-  const systemPrompt = `You are a precise SMS compressor.
-Your output MUST be ${maxChars} characters or fewer.
+  const overBy = currentDraft.length - maxChars;
+
+  const systemPrompt = `You are a precise SMS compressor. Your ONLY job is to shorten the draft below.
+Your output MUST be ${maxChars} characters or fewer. Count every character including spaces and punctuation.
 
 Rules:
-- Keep the core meaning and intent.
+- The draft is ${overBy} characters too long. Remove or shorten ${overBy}+ characters worth of words.
+- Use common abbreviations (e.g. "appointment" -> "appt", "please" -> "pls", "and" -> "&").
+- Remove filler words ("just", "also", "the" where possible).
 - Keep required tokens exactly as written.
-- Keep language: ${targetLanguage}.
-- Keep tone: ${businessSector}.
-- Prefer shortening/rephrasing over dropping critical information.
-- Return ONLY final SMS text.`;
+- Keep language: ${targetLanguage}. Keep tone: ${businessSector}.
+- Return ONLY the final SMS text, nothing else.`;
 
-  const userPrompt = `Original message:
-${originalText}
-
-Current draft (${currentDraft.length} chars):
-${currentDraft || "[empty draft]"}
+  const userPrompt = `Draft (${currentDraft.length} chars, MUST become <= ${maxChars}):
+${currentDraft}
 
 Required tokens (must appear exactly):
 ${requiredTokensBlock}
 
-Hard constraint: final SMS MUST be <= ${maxChars} characters.`;
+Remove at least ${overBy} characters. Output ONLY the shortened text.`;
 
   return { systemPrompt, userPrompt };
 }
@@ -549,7 +622,6 @@ Message to process: ${processedText}`;
     if (!limitMet && remainingMs(deadlineTs) >= MIN_REMAINING_FOR_ATTEMPT_MS) {
       try {
         const strictPrompts = buildStrictLimitPrompts({
-          originalText: processedText,
           currentDraft: shortenedText,
           maxChars,
           targetLanguage,
@@ -576,18 +648,12 @@ Message to process: ${processedText}`;
     }
 
     if (!limitMet) {
-      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
       console.warn(
-        `Strict limit not met | ${duration}s | Target:${maxChars} | Got:${shortenedText.length} | Attempts:${optimization.attempts.length}`,
+        `AI over limit (${shortenedText.length}/${maxChars}), applying smart trim`,
       );
-      return res.status(422).json({
-        error: `Could not produce a <=${maxChars} character message without unsafe truncation. Please retry.`,
-        original_text: processedText,
-        original_length: processedText.length,
-        target_max_chars: maxChars,
-        rewrite_attempts: optimization.attempts.length,
-        limit_met: false,
-      });
+      shortenedText = smartTrim(shortenedText, maxChars);
+      missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
+      limitMet = shortenedText.length <= maxChars;
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
