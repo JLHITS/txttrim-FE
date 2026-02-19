@@ -1,3 +1,99 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* --- NHS Color Tokens --- */
+@theme {
+  --color-nhs-blue: #005eb8;
+  --color-nhs-dark-blue: #003087;
+  --color-nhs-light-blue: #41B6E6;
+  --color-nhs-green: #007F3B;
+  --color-nhs-red: #DA291C;
+  --color-nhs-warm-yellow: #FFB81C;
+  --color-nhs-grey-1: #4c6272;
+  --color-nhs-grey-2: #768692;
+  --color-nhs-grey-3: #aeb7bd;
+  --color-nhs-grey-4: #d8dde0;
+  --color-nhs-grey-5: #f0f4f5;
+}
+
+/* --- Base Styles --- */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: Arial, sans-serif;
+}
+
+/* --- Custom Animations --- */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes scale-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* --- Animation Utilities --- */
+@utility animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out both;
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out both;
+}
+
+@utility animate-shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+@utility animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@utility animate-scale-bounce {
+  animation: scale-bounce 0.3s ease-out;
+}
+
+@utility animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* --- Scrollbar Hiding --- */
+@utility hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
