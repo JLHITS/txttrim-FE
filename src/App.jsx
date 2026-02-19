@@ -6,7 +6,6 @@ import { useHistory } from "./hooks/useHistory";
 import { usePreferences } from "./hooks/usePreferences";
 import { useShorten } from "./hooks/useShorten";
 
-import { MaintenanceGate } from "./components/auth/MaintenanceGate";
 import { Header } from "./components/layout/Header";
 import { MessageInput } from "./components/input/MessageInput";
 import { SettingsPanel } from "./components/input/SettingsPanel";
@@ -20,7 +19,6 @@ import { AboutDialog } from "./components/modals/AboutDialog";
 
 function App() {
   const [text, setText] = useState("");
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -39,13 +37,6 @@ function App() {
     handleCopy,
     setResponse,
   } = useShorten({ addToHistory });
-
-  // Check maintenance unlock on mount
-  useEffect(() => {
-    if (sessionStorage.getItem("txttrim_maintenance_unlocked") === "1") {
-      setIsUnlocked(true);
-    }
-  }, []);
 
   const triggerShorten = useCallback(
     (overrides = {}) => {
@@ -89,10 +80,6 @@ function App() {
     setShowHistory(false);
     track("history_loaded");
   };
-
-  if (!isUnlocked) {
-    return <MaintenanceGate onUnlock={() => setIsUnlocked(true)} />;
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 selection:bg-blue-100 dark:selection:bg-blue-900 transition-colors duration-300">

@@ -6,11 +6,11 @@ const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
 const OUTPUT_TOKEN_BUFFER = 180;
 const MAX_REWRITE_ATTEMPTS = 1;
-const REQUEST_TIME_BUDGET_MS = 9000;
-const MIN_REMAINING_FOR_ATTEMPT_MS = 1200;
-const MIN_CALL_TIMEOUT_MS = 500;
+const REQUEST_TIME_BUDGET_MS = 12000;
+const MIN_REMAINING_FOR_ATTEMPT_MS = 1500;
+const MIN_CALL_TIMEOUT_MS = 600;
 const URL_SHORTENER_TIMEOUT_MS = 800;
-const AI_CALL_TIMEOUT_MS = 5000;
+const AI_CALL_TIMEOUT_MS = 8000;
 const MAX_URLS_TO_SHORTEN = 3;
 const URL_PATTERN = /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"'`]*)?/gi;
 const PLACEHOLDER_PATTERN = /\[[^\]\r\n]+\]/g;
@@ -242,25 +242,24 @@ function formatRequiredTokens(requiredTokens) {
   return requiredTokens.map((token) => `- ${token}`).join("\n");
 }
 
-function extractTextFromContentParts(parts) {
-  if (!Array.isArray(parts)) return "";
-
-  return parts
-    .map((part) => {
-      if (typeof part === "string") return part;
-      if (typeof part?.text === "string") return part.text;
-      if (typeof part?.output_text === "string") return part.output_text;
-      if (part?.text && typeof part.text?.value === "string") return part.text.value;
-      return "";
-    })
-    .join("")
-    .trim();
-}
-
-function extractTextFromChatCompletion(response) {
-  const content = response?.choices?.[0]?.message?.content;
-  if (typeof content === "string") return content.trim();
-  return extractTextFromContentParts(content);
+function extractTextFromResponse(response) {
+  // Responses API: output is an array of items with type "message"
+  if (Array.isArray(response?.output)) {
+    for (const item of response.output) {
+      if (item.type === "message" && Array.isArray(item.content)) {
+        for (const part of item.content) {
+          if (part.type === "output_text" && typeof part.text === "string") {
+            return part.text.trim();
+          }
+        }
+      }
+    }
+  }
+  // Fallback: check output_text directly
+  if (typeof response?.output_text === "string") {
+    return response.output_text.trim();
+  }
+  return "";
 }
 
 
@@ -288,19 +287,18 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
   const estimatedVisibleTokens = Math.ceil(maxChars / 3) + 30;
   const maxOutputTokens = Math.max(400, Math.min(estimatedVisibleTokens + 600, 1200));
 
-  const chatResult = await client.chat.completions.create({
+  const result = await client.responses.create({
     model: OPENAI_MODEL,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    max_completion_tokens: maxOutputTokens,
-    reasoning_effort: "low",
+    instructions: systemPrompt,
+    input: userPrompt,
+    max_output_tokens: maxOutputTokens,
+    reasoning: { effort: "none" },
+    text: { verbosity: "low" },
   }, { timeout: timeoutMs, maxRetries: 0 });
 
   return {
-    text: extractTextFromChatCompletion(chatResult),
-    usage: chatResult.usage,
+    text: extractTextFromResponse(result),
+    usage: result.usage,
   };
 }
 
