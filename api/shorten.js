@@ -113,7 +113,7 @@ Rules:
         { role: "system", content: systemPrompt },
         { role: "user", content: processedText },
       ],
-      max_tokens: maxChars + 100,
+      max_completion_tokens: maxChars + 100,
     });
 
     let shortenedText = (response.choices[0].message.content || "").trim();
