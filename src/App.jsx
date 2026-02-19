@@ -11,6 +11,7 @@ import { Header } from "./components/layout/Header";
 import { MessageInput } from "./components/input/MessageInput";
 import { SettingsPanel } from "./components/input/SettingsPanel";
 import { ShortenButton } from "./components/input/ShortenButton";
+import { PhonePreview } from "./components/output/PhonePreview";
 import { ResultsCard } from "./components/output/ResultsCard";
 import { CostSavings } from "./components/output/CostSavings";
 import { HistorySheet } from "./components/modals/HistorySheet";
@@ -109,58 +110,70 @@ function App() {
         onShowAbout={() => setShowAbout(!showAbout)}
       />
 
-      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        <MessageInput
-          text={text}
-          onTextChange={setText}
-          errorMessage={errorMessage}
-          onClearError={() => setErrorMessage("")}
-        />
+      <main id="main-content" className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* LEFT COLUMN: Inputs */}
+        <div className="lg:col-span-7 space-y-6">
+          <MessageInput
+            text={text}
+            onTextChange={setText}
+            errorMessage={errorMessage}
+            onClearError={() => setErrorMessage("")}
+          />
 
-        <SettingsPanel
-          maxChars={prefs.maxChars}
-          onMaxCharsChange={prefs.setMaxChars}
-          businessSector={prefs.businessSector}
-          onBusinessSectorChange={prefs.setBusinessSector}
-          targetLanguage={prefs.targetLanguage}
-          onTargetLanguageChange={prefs.setTargetLanguage}
-          signature={prefs.signature}
-          onSignatureChange={prefs.setSignature}
-          shortenUrls={prefs.shortenUrls}
-          onShortenUrlsChange={prefs.setShortenUrls}
-          protectVariables={prefs.protectVariables}
-          onProtectVariablesChange={prefs.setProtectVariables}
-        />
+          <SettingsPanel
+            maxChars={prefs.maxChars}
+            onMaxCharsChange={prefs.setMaxChars}
+            businessSector={prefs.businessSector}
+            onBusinessSectorChange={prefs.setBusinessSector}
+            targetLanguage={prefs.targetLanguage}
+            onTargetLanguageChange={prefs.setTargetLanguage}
+            signature={prefs.signature}
+            onSignatureChange={prefs.setSignature}
+            shortenUrls={prefs.shortenUrls}
+            onShortenUrlsChange={prefs.setShortenUrls}
+            protectVariables={prefs.protectVariables}
+            onProtectVariablesChange={prefs.setProtectVariables}
+          />
 
-        <ShortenButton
-          loading={loading}
-          disabled={!text.trim()}
-          onShorten={() => triggerShorten()}
-        />
+          <ShortenButton
+            loading={loading}
+            disabled={!text.trim()}
+            onShorten={() => triggerShorten()}
+          />
+        </div>
 
-        <ResultsCard
-          response={response}
-          copied={copied}
-          onCopy={handleCopy}
-          onShowQR={() => setShowQR(true)}
-          onSimplify={refineSimple}
-        />
+        {/* RIGHT COLUMN: Preview & Results */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="lg:sticky lg:top-24">
+            <div className="space-y-6">
+              <PhonePreview response={response} />
 
-        <CostSavings response={response} />
+              <ResultsCard
+                response={response}
+                copied={copied}
+                onCopy={handleCopy}
+                onShowQR={() => setShowQR(true)}
+                onSimplify={refineSimple}
+              />
 
-        <div className="text-center">
-          <button
-            onClick={() => setShowDisclaimer(!showDisclaimer)}
-            className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
-          >
-            {showDisclaimer ? "Hide Disclaimer" : "Legal Disclaimer"}
-          </button>
-          {showDisclaimer && (
-            <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 text-left bg-slate-100 dark:bg-slate-800 p-4 rounded-lg">
-              <strong>Disclaimer:</strong> Do not enter confidential/PII data.
-              TxtTrim is an automated tool. Always verify messages.
+              <CostSavings response={response} />
+
+              <div className="text-center">
+                <button
+                  onClick={() => setShowDisclaimer(!showDisclaimer)}
+                  className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline"
+                >
+                  {showDisclaimer ? "Hide Disclaimer" : "Legal Disclaimer"}
+                </button>
+                {showDisclaimer && (
+                  <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 text-left bg-slate-100 dark:bg-slate-800 p-4 rounded-lg">
+                    <strong>Disclaimer:</strong> Do not enter confidential/PII data.
+                    TxtTrim is an automated tool. Always verify messages.
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </main>
 
