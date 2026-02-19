@@ -9,7 +9,7 @@ import rushcliffeLogo from "./assets/rushcliffepcn.png";
 import nottsWestLogo from "./assets/nottinghamwestpcn.png";
 
 // --- CONFIG ---
-const API_BASE_URL = "";
+const API_BASE_URL = "/api";
 const COST_PER_FRAGMENT = 0.022; 
 
 // --- TEMPLATES DATA ---
