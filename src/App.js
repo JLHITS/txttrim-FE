@@ -191,7 +191,13 @@ function App() {
 
     // Calculate available chars for AI (Total limit - Signature length)
     const sigLength = signature ? signature.length + 1 : 0; 
-    const aiMaxChars = Math.max(20, charsToUse - sigLength);
+    const aiMaxChars = charsToUse - sigLength;
+
+    if (aiMaxChars < 1) {
+      setLoading(false);
+      setErrorMessage("Signature is too long for the selected SMS limit. Shorten signature or increase target limit.");
+      return;
+    }
 
     try {
       const res = await fetch(`${API_BASE_URL}/shorten`, {

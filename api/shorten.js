@@ -5,7 +5,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
 const OUTPUT_TOKEN_BUFFER = 180;
-const MAX_REWRITE_ATTEMPTS = 1;
+const MAX_REWRITE_ATTEMPTS = 3;
 const REQUEST_TIME_BUDGET_MS = 14000;
 const MIN_REMAINING_FOR_ATTEMPT_MS = 1800;
 const MIN_CALL_TIMEOUT_MS = 700;
@@ -162,7 +162,11 @@ function evaluateAttempt(text, maxChars, requiredTokens) {
 }
 
 function pickBestAttempt(attempts) {
-  return attempts.reduce((best, current) => {
+  const pool = attempts.some((attempt) => attempt.withinLimit)
+    ? attempts.filter((attempt) => attempt.withinLimit)
+    : attempts;
+
+  return pool.reduce((best, current) => {
     if (!best) return current;
     if (current.score > best.score) return current;
     if (current.score === best.score && current.text.length < best.text.length) return current;
@@ -234,7 +238,7 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
   }
 
   const estimatedVisibleTokens = Math.ceil(maxChars / 3) + 30;
-  const maxOutputTokens = Math.max(220, Math.min(estimatedVisibleTokens + 260, 900));
+  const maxOutputTokens = Math.max(600, Math.min(estimatedVisibleTokens + 900, 2200));
   const requestOptions = { timeout: primaryTimeoutMs, maxRetries: 0 };
 
   try {
@@ -282,6 +286,41 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
     text: extractTextFromChatCompletion(chatResult),
     usage: chatResult.usage,
   };
+}
+
+function buildStrictLimitPrompts({
+  originalText,
+  currentDraft,
+  maxChars,
+  targetLanguage,
+  businessSector,
+  requiredTokens,
+}) {
+  const requiredTokensBlock = formatRequiredTokens(requiredTokens);
+
+  const systemPrompt = `You are a precise SMS compressor.
+Your output MUST be ${maxChars} characters or fewer.
+
+Rules:
+- Keep the core meaning and intent.
+- Keep required tokens exactly as written.
+- Keep language: ${targetLanguage}.
+- Keep tone: ${businessSector}.
+- Prefer shortening/rephrasing over dropping critical information.
+- Return ONLY final SMS text.`;
+
+  const userPrompt = `Original message:
+${originalText}
+
+Current draft (${currentDraft.length} chars):
+${currentDraft || "[empty draft]"}
+
+Required tokens (must appear exactly):
+${requiredTokensBlock}
+
+Hard constraint: final SMS MUST be <= ${maxChars} characters.`;
+
+  return { systemPrompt, userPrompt };
 }
 
 function buildRevisionPrompts({
@@ -414,7 +453,7 @@ export default async function handler(req, res) {
 
   let maxChars = parseInt(data.max_chars, 10);
   if (isNaN(maxChars)) maxChars = 160;
-  maxChars = Math.min(Math.max(maxChars, 50), 1600);
+  maxChars = Math.min(Math.max(maxChars, 1), 1600);
 
   const doShortenUrls = toBool(data.shorten_urls, true);
   const businessSector = data.business_sector || "General";
@@ -490,8 +529,53 @@ Message to process: ${processedText}`;
       });
     }
 
-    const missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
-    const limitMet = shortenedText.length <= maxChars;
+    let missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
+    let limitMet = shortenedText.length <= maxChars;
+
+    if (!limitMet && remainingMs(deadlineTs) >= MIN_REMAINING_FOR_ATTEMPT_MS) {
+      try {
+        const strictPrompts = buildStrictLimitPrompts({
+          originalText: processedText,
+          currentDraft: shortenedText,
+          maxChars,
+          targetLanguage,
+          businessSector,
+          requiredTokens,
+        });
+
+        const strictResult = await generateModelText(
+          strictPrompts.systemPrompt,
+          strictPrompts.userPrompt,
+          maxChars,
+          deadlineTs,
+        );
+
+        const strictCandidate = sanitizeModelOutput(strictResult.text);
+        if (strictCandidate) {
+          shortenedText = strictCandidate;
+          missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
+          limitMet = shortenedText.length <= maxChars;
+        }
+      } catch (e) {
+        console.warn(`Strict-limit retry failed: ${e.message}`);
+      }
+    }
+
+    if (!limitMet) {
+      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+      console.warn(
+        `Strict limit not met | ${duration}s | Target:${maxChars} | Got:${shortenedText.length} | Attempts:${optimization.attempts.length}`,
+      );
+      return res.status(422).json({
+        error: `Could not produce a <=${maxChars} character message without unsafe truncation. Please retry.`,
+        original_text: processedText,
+        original_length: processedText.length,
+        target_max_chars: maxChars,
+        rewrite_attempts: optimization.attempts.length,
+        limit_met: false,
+      });
+    }
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     const totalTokens = formatTokenCount(optimization.totalTokens);
     console.log(
