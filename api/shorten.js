@@ -4,6 +4,7 @@ import OpenAI from "openai";
 // NOTE: reasoning/verbosity params below require a GPT-5 family model.
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
+const TINYURL_API = "https://tinyurl.com/api-create.php?url=";
 const MAX_INPUT_LENGTH = 5000;
 const MAX_REWRITE_ATTEMPTS = 1;
 const REQUEST_TIME_BUDGET_MS = 12000;
@@ -93,24 +94,40 @@ function extractUrlCandidates(text) {
   return items;
 }
 
-async function shortenWithIsgd(url, deadlineTs) {
+async function fetchShortUrl(apiUrl, deadlineTs, label) {
   const timeoutMs = getCallTimeoutMs(deadlineTs, URL_SHORTENER_TIMEOUT_MS);
   if (!timeoutMs) return null;
 
   try {
-    const encoded = encodeURIComponent(url);
-    const res = await fetch(`${ISGD_API}${encoded}`, {
+    const res = await fetch(apiUrl, {
       headers: { "User-Agent": "TxtTrim/1.0" },
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (res.ok) {
-      const text = await res.text();
-      if (text.startsWith("http")) return text.trim();
+    const body = (await res.text()).trim();
+    if (res.ok && /^https?:\/\//i.test(body) && !/\s/.test(body)) {
+      return body;
     }
+    // is.gd reports some failures as HTTP 200 with an error message body
+    // (e.g. "Error, database insert failed"), so the body must be logged —
+    // the status code alone looks like a success in the request logs.
+    console.warn(`[${label}] could not shorten: HTTP ${res.status} "${body.slice(0, 100)}"`);
   } catch (e) {
-    console.error("[is.gd Error]", e.message);
+    console.error(`[${label}] error:`, e.message);
   }
   return null;
+}
+
+// is.gd gives the shortest links, but it rejects some URLs (links to other
+// redirect services such as youtu.be) and has intermittent outages that
+// still return HTTP 200. TinyURL is queried in parallel as a backup so an
+// is.gd failure costs no extra time.
+async function shortenSingleUrl(url, deadlineTs) {
+  const encoded = encodeURIComponent(url);
+  const [isgd, tiny] = await Promise.all([
+    fetchShortUrl(`${ISGD_API}${encoded}`, deadlineTs, "is.gd"),
+    fetchShortUrl(`${TINYURL_API}${encoded}`, deadlineTs, "TinyURL"),
+  ]);
+  return isgd || tiny;
 }
 
 async function shortenUrlsInText(text, deadlineTs) {
@@ -131,10 +148,11 @@ async function shortenUrlsInText(text, deadlineTs) {
   const shortenedByToken = new Map();
   await Promise.all(
     normalizedLinks.map(async (normalizedUrl) => {
-      const short = await shortenWithIsgd(normalizedUrl, deadlineTs);
+      const short = await shortenSingleUrl(normalizedUrl, deadlineTs);
       const tokens = uniqueByNormalized.get(normalizedUrl) || [];
       for (const token of tokens) {
-        shortenedByToken.set(token, short || token);
+        // Only substitute when the short link actually saves characters.
+        shortenedByToken.set(token, short && short.length < token.length ? short : token);
       }
     }),
   );
@@ -777,6 +795,7 @@ Message to process: ${processedText}`;
 export {
   smartTrim,
   smsFragments,
+  shortenUrlsInText,
   normalizeGsmPunctuation,
   sanitizeModelOutput,
   extractUrlCandidates,
