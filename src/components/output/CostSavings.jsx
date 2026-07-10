@@ -8,8 +8,8 @@ export function CostSavings({ response }) {
 
   if (!response) return null;
 
-  const oldFrags = getFragmentCount(response.original_length);
-  const newFrags = getFragmentCount(response.shortened_length);
+  const oldFrags = getFragmentCount(response.original_text ?? response.original_length);
+  const newFrags = getFragmentCount(response.shortened_text ?? response.shortened_length);
   const savedFrags = oldFrags - newFrags;
   if (savedFrags <= 0) return null;
 

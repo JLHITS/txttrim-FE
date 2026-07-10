@@ -15,6 +15,9 @@ export function ResultsCard({
     100
   ).toFixed(0);
 
+  const overLimit = response.limit_met === false;
+  const missingTokens = response.missing_required_tokens || [];
+
   return (
     <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl p-5 transition-colors animate-fade-in-up">
       <div className="flex justify-between items-center mb-4">
@@ -25,6 +28,29 @@ export function ResultsCard({
           -{percentSaved}% Size
         </span>
       </div>
+      {(overLimit || missingTokens.length > 0) && (
+        <div
+          role="alert"
+          className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700 rounded-lg text-sm text-amber-800 dark:text-amber-200 space-y-1"
+        >
+          {overLimit && (
+            <p>
+              <strong>Over target:</strong> the message is{" "}
+              {response.shortened_length} characters (target{" "}
+              {response.target_max_chars}). Nothing was cut to force it to fit
+              — please review and trim manually if needed.
+            </p>
+          )}
+          {missingTokens.length > 0 && (
+            <p>
+              <strong>Check before sending:</strong> the following could not be
+              kept in the shortened text:{" "}
+              {missingTokens.join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
           <p className="text-xs text-emerald-600 dark:text-emerald-500 uppercase font-bold">

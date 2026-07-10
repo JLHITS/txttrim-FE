@@ -10,7 +10,7 @@ export function MessageInput({ text, onTextChange, errorMessage, onClearError })
     }
   };
 
-  const fragments = getFragmentCount(text.length);
+  const fragments = getFragmentCount(text);
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">

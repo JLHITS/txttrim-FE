@@ -1,18 +1,25 @@
 import OpenAI from "openai";
 
 // --- CONFIG ---
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+// NOTE: reasoning/verbosity params below require a GPT-5 family model.
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5-nano";
 const ISGD_API = "https://is.gd/create.php?format=simple&url=";
 const MAX_INPUT_LENGTH = 5000;
-const OUTPUT_TOKEN_BUFFER = 180;
-const MAX_REWRITE_ATTEMPTS = 2;
+const MAX_REWRITE_ATTEMPTS = 1;
 const REQUEST_TIME_BUDGET_MS = 12000;
 const MIN_REMAINING_FOR_ATTEMPT_MS = 1500;
 const MIN_CALL_TIMEOUT_MS = 600;
-const URL_SHORTENER_TIMEOUT_MS = 800;
+const URL_SHORTENER_TIMEOUT_MS = 1500;
 const AI_CALL_TIMEOUT_MS = 8000;
 const MAX_URLS_TO_SHORTEN = 3;
 const URL_PATTERN = /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"'`]*)?/gi;
+// Bare domains (no protocol/www) are only treated as links when the TLD is
+// recognisably web-like, so "report.pdf" or a "word.Word" typo never gets
+// sent to is.gd.
+const BARE_DOMAIN_TLDS = new Set([
+  "com", "org", "net", "edu", "gov", "uk", "co", "io", "me", "info",
+  "app", "dev", "ly", "gd", "health", "online", "site", "digital", "eu", "ie",
+]);
 const PLACEHOLDER_PATTERN = /\[[^\]\r\n]+\]/g;
 const PHONE_OR_LONG_NUMBER_PATTERN = /\b(?:\+?\d[\d\s().-]{6,}\d)\b/g;
 const DATE_TIME_PATTERN = /\b(?:\d{1,2}[:.]\d{2}(?:\s?[AaPp][Mm])?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)\b/g;
@@ -56,8 +63,11 @@ function normalizeUrlCandidate(candidate) {
   if (/^https?:\/\//i.test(value)) return value;
   if (/^www\./i.test(value)) return `https://${value}`;
 
-  // Bare domains like "practice.com/link"
-  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/.*)?$/i.test(value)) return `https://${value}`;
+  // Bare domains like "practice.com/link" — only for recognised TLDs
+  const bareMatch = value.match(/^[a-z0-9.-]+\.([a-z]{2,})(?:\/.*)?$/i);
+  if (bareMatch && BARE_DOMAIN_TLDS.has(bareMatch[1].toLowerCase())) {
+    return `https://${value}`;
+  }
 
   return null;
 }
@@ -141,14 +151,42 @@ async function shortenUrlsInText(text, deadlineTs) {
   });
 }
 
-function smartTrim(text, maxChars) {
+// Masks required tokens (links, phone numbers, merge fields) with sentinels so
+// the compression passes can never rewrite their contents.
+function maskRequiredTokens(text, requiredTokens) {
+  let masked = text;
+  const map = [];
+  requiredTokens.forEach((token, i) => {
+    if (!masked.includes(token)) return;
+    const sentinel = `\u0000${i}\u0000`;
+    masked = masked.split(token).join(sentinel);
+    map.push([sentinel, token]);
+  });
+  return { masked, map };
+}
+
+function unmaskRequiredTokens(text, map) {
+  let out = text;
+  for (const [sentinel, token] of map) {
+    out = out.split(sentinel).join(token);
+  }
+  return out;
+}
+
+// Deterministic compression that preserves required tokens and never cuts
+// content mid-sentence. If the text still exceeds maxChars after all passes,
+// it is returned over-limit — the caller reports limit_met: false rather than
+// silently deleting links or the final call to action.
+function smartTrim(text, maxChars, requiredTokens = []) {
   if (text.length <= maxChars) return text;
 
-  let result = text;
+  const { masked, map } = maskRequiredTokens(text, requiredTokens);
+  let result = masked;
+  const realLength = () => unmaskRequiredTokens(result, map).length;
 
-  // Step 1: Remove trailing punctuation (except those inside required tokens)
+  // Step 1: Remove trailing punctuation
   result = result.replace(/[.!]+$/, "").trim();
-  if (result.length <= maxChars) return result;
+  if (realLength() <= maxChars) return unmaskRequiredTokens(result, map);
 
   // Step 2: Common abbreviations
   const abbrevs = [
@@ -163,8 +201,6 @@ function smartTrim(text, maxChars) {
     [/\bmanagement\b/gi, "mgmt"],
     [/\breference\b/gi, "ref"],
     [/\bconfirmation\b/gi, "conf"],
-    [/\bcancellation\b/gi, "cancellation"],
-    [/\bnumber\b/gi, "no"],
     [/\bmonday\b/gi, "Mon"],
     [/\btuesday\b/gi, "Tue"],
     [/\bwednesday\b/gi, "Wed"],
@@ -186,38 +222,60 @@ function smartTrim(text, maxChars) {
     [/ and /gi, " & "],
   ];
   for (const [pattern, replacement] of abbrevs) {
-    if (result.length <= maxChars) break;
+    if (realLength() <= maxChars) break;
     result = result.replace(pattern, replacement);
   }
   result = normalizeWhitespace(result);
-  if (result.length <= maxChars) return result;
+  if (realLength() <= maxChars) return unmaskRequiredTokens(result, map);
 
   // Step 3: Remove filler words
   const fillers = [/\bjust\b/gi, /\balso\b/gi, /\bkindly\b/gi, /\bsimply\b/gi];
   for (const filler of fillers) {
-    if (result.length <= maxChars) break;
+    if (realLength() <= maxChars) break;
     result = result.replace(filler, "");
     result = normalizeWhitespace(result);
   }
-  if (result.length <= maxChars) return result;
+  if (realLength() <= maxChars) return unmaskRequiredTokens(result, map);
 
   // Step 4: Remove "the " where it's not critical
   result = result.replace(/\bthe\s+/gi, "");
   result = normalizeWhitespace(result);
-  if (result.length <= maxChars) return result;
 
-  // Step 5: Trim from end at word boundary as last resort
-  while (result.length > maxChars) {
-    const lastSpace = result.lastIndexOf(" ");
-    if (lastSpace <= 0) break;
-    result = result.slice(0, lastSpace).replace(/[,;:\s]+$/, "");
-  }
-
-  return result;
+  // No end-chopping: return best effort even if still over the limit.
+  return unmaskRequiredTokens(result, map);
 }
 
-function smsFragments(length) {
-  return Math.ceil(length / 160) || 1;
+// GSM 03.38 basic character set (1 septet each) and extension set (2 septets).
+// Any character outside both forces the whole SMS into UCS-2 encoding.
+const GSM7_BASIC = new Set(
+  ("@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?" +
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà").split(""),
+);
+const GSM7_EXTENDED = new Set("^{}\\[~]|€".split(""));
+
+function smsFragments(text) {
+  const value = String(text || "");
+  if (!value) return 1;
+
+  let septets = 0;
+  let isGsm = true;
+  for (const ch of value) {
+    if (GSM7_BASIC.has(ch)) {
+      septets += 1;
+    } else if (GSM7_EXTENDED.has(ch)) {
+      septets += 2;
+    } else {
+      isGsm = false;
+      break;
+    }
+  }
+
+  if (isGsm) {
+    return septets <= 160 ? 1 : Math.ceil(septets / 153);
+  }
+  // UCS-2: 70 chars single-part, 67 per segment multipart
+  const units = value.length;
+  return units <= 70 ? 1 : Math.ceil(units / 67);
 }
 
 function normalizeWhitespace(text) {
@@ -254,9 +312,23 @@ function findMissingRequiredTokens(text, requiredTokens) {
   return requiredTokens.filter((token) => !text.includes(token));
 }
 
+// Typographic characters the model likes to emit (curly quotes, en/em dashes,
+// ellipsis) are not in GSM-7 and silently force the SMS into UCS-2 encoding —
+// 70-char segments instead of 160. Normalise them to GSM-safe equivalents.
+function normalizeGsmPunctuation(text) {
+  return String(text || "")
+    .replace(/[\u2018\u2019\u02BC\u2032]/g, "'") // curly/prime apostrophes
+    .replace(/[\u201C\u201D\u2033]/g, '"') // curly double quotes
+    .replace(/[\u2010-\u2015\u2212]/g, "-") // hyphens, en/em dashes, minus
+    .replace(/\u2026/g, "...") // ellipsis
+    .replace(/[\u200B-\u200D\uFEFF]/g, "") // zero-width chars
+    .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, " "); // exotic spaces
+}
+
 function sanitizeModelOutput(text) {
   let output = String(text || "").replace(/\r\n/g, "\n").trim();
 
+  output = normalizeGsmPunctuation(output);
   output = output.replace(/^```(?:\w+)?\s*/i, "").replace(/\s*```$/, "").trim();
   output = output.replace(/^\s*(?:shortened(?:\s+message)?|sms|translation|output)\s*:\s*/i, "").trim();
 
@@ -300,9 +372,17 @@ function evaluateAttempt(text, maxChars, requiredTokens) {
 }
 
 function pickBestAttempt(attempts) {
-  const pool = attempts.some((attempt) => attempt.withinLimit)
-    ? attempts.filter((attempt) => attempt.withinLimit)
-    : attempts;
+  if (!attempts.length) return null;
+
+  // Keeping every required token (links, phone numbers, merge fields) beats
+  // meeting the character limit: a slightly-long message can be compressed or
+  // flagged, but a deleted link cannot be recovered.
+  const withAllTokens = attempts.filter((attempt) => attempt.missingRequired.length === 0);
+  const tokenPool = withAllTokens.length ? withAllTokens : attempts;
+
+  const pool = tokenPool.some((attempt) => attempt.withinLimit)
+    ? tokenPool.filter((attempt) => attempt.withinLimit)
+    : tokenPool;
 
   return pool.reduce((best, current) => {
     if (!best) return current;
@@ -565,7 +645,12 @@ export default async function handler(req, res) {
 
   const requiredTokens = extractRequiredTokens(processedText, protectVariables);
 
-  // --- PROMPT ENGINEERING (Legacy Python-style) ---
+  // --- PROMPT ENGINEERING ---
+  // Ask for ~10% headroom below the hard limit: the model cannot count
+  // characters precisely, so aiming low means its typical overshoot still
+  // lands within maxChars and the first attempt usually succeeds.
+  const aimChars = Math.max(1, maxChars - Math.min(Math.ceil(maxChars * 0.1), 25));
+
   const role = "You are a precise SMS message shortener and translator.";
   const protection = protectVariables
     ? "CRITICAL: Do NOT change, delete, or translate any text inside [square brackets] (e.g. [Date]). Keep them exactly as is."
@@ -573,18 +658,21 @@ export default async function handler(req, res) {
 
   const task =
     targetLanguage && targetLanguage !== "English"
-      ? `Task: Translate the message to ${targetLanguage} FIRST, and THEN shorten the translated text to under ${maxChars} characters.`
-      : `Task: Shorten the message to under ${maxChars} characters in English.`;
+      ? `Task: Translate the message to ${targetLanguage} FIRST, and THEN shorten the translated text. Aim for ${aimChars} characters or fewer; never exceed ${maxChars} characters.`
+      : `Task: Shorten the message in English. Aim for ${aimChars} characters or fewer; never exceed ${maxChars} characters.`;
 
   const systemPrompt = role;
   const initialUserPrompt = `${task}
 
 Rules:
-- Maintain the original meaning.
+- Maintain the original meaning, key actions, dates/times, and contact details.
 - Tone: ${businessSector}.
 - ${protection}
-- If multiple links exist, keep them all.
+- Keep every link. Do not drop, alter, or shorten links yourself.
 - Provide ONLY the final SMS text. No intro/outro.
+
+These tokens must appear in the output exactly as written:
+${formatRequiredTokens(requiredTokens)}
 
 Message to process: ${processedText}`;
 
@@ -637,7 +725,13 @@ Message to process: ${processedText}`;
         );
 
         const strictCandidate = sanitizeModelOutput(strictResult.text);
-        if (strictCandidate) {
+        // Only adopt the stricter draft if it doesn't lose required tokens
+        // the current draft still has.
+        if (
+          strictCandidate &&
+          findMissingRequiredTokens(strictCandidate, requiredTokens).length <=
+            missingRequiredTokens.length
+        ) {
           shortenedText = strictCandidate;
           missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
           limitMet = shortenedText.length <= maxChars;
@@ -651,7 +745,7 @@ Message to process: ${processedText}`;
       console.warn(
         `AI over limit (${shortenedText.length}/${maxChars}), applying smart trim`,
       );
-      shortenedText = smartTrim(shortenedText, maxChars);
+      shortenedText = smartTrim(shortenedText, maxChars, requiredTokens);
       missingRequiredTokens = findMissingRequiredTokens(shortenedText, requiredTokens);
       limitMet = shortenedText.length <= maxChars;
     }
@@ -667,7 +761,7 @@ Message to process: ${processedText}`;
       shortened_text: shortenedText,
       original_length: processedText.length,
       shortened_length: shortenedText.length,
-      sms_fragments: smsFragments(shortenedText.length),
+      sms_fragments: smsFragments(shortenedText),
       target_max_chars: maxChars,
       limit_met: limitMet,
       rewrite_attempts: optimization.attempts.length,
@@ -678,3 +772,16 @@ Message to process: ${processedText}`;
     return res.status(500).json({ error: "Failed to process message. Please try again." });
   }
 }
+
+// Named exports for unit testing only — Vercel invokes the default export.
+export {
+  smartTrim,
+  smsFragments,
+  normalizeGsmPunctuation,
+  sanitizeModelOutput,
+  extractUrlCandidates,
+  extractRequiredTokens,
+  normalizeUrlCandidate,
+  pickBestAttempt,
+  findMissingRequiredTokens,
+};

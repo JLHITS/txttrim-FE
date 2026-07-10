@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { API_BASE_URL } from "../lib/constants";
+import { getFragmentCount } from "../lib/sms-utils";
 import { track } from "../lib/analytics";
 
 export function useShorten({ addToHistory }) {
@@ -71,12 +72,15 @@ export function useShorten({ addToHistory }) {
 
       if (!res.ok) {
         const serverError = data?.error || `Server error (${res.status}).`;
-        throw new Error(serverError);
+        const err = new Error(serverError);
+        err.status = res.status;
+        throw err;
       }
 
       if (signature && typeof data.shortened_text === "string") {
         data.shortened_text = `${data.shortened_text} ${signature}`;
         data.shortened_length = data.shortened_text.length;
+        data.sms_fragments = getFragmentCount(data.shortened_text);
       }
 
       setResponse(data);
@@ -92,7 +96,7 @@ export function useShorten({ addToHistory }) {
       });
     } catch (error) {
       console.error("Error:", error);
-      if ((error.message || "").includes("504")) {
+      if (error.status === 504 || (error.message || "").includes("504")) {
         setErrorMessage(
           "The server timed out. Please retry once or reduce message length.",
         );

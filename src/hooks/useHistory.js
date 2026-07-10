@@ -6,8 +6,13 @@ export function useHistory() {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    if (stored.length) setHistory(stored);
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      if (Array.isArray(stored) && stored.length) setHistory(stored);
+    } catch {
+      // Corrupt history must never take down the whole app on mount.
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }, []);
 
   const addToHistory = (item) => {

@@ -14,7 +14,10 @@ export function usePreferences() {
     const storedSig = localStorage.getItem("txttrim_signature");
 
     if (storedSector) setBusinessSector(storedSector);
-    if (storedMaxChars) setMaxChars(Number(storedMaxChars));
+    const parsedMaxChars = Number(storedMaxChars);
+    if (Number.isFinite(parsedMaxChars) && parsedMaxChars > 0) {
+      setMaxChars(parsedMaxChars);
+    }
     if (storedSig) setSignature(storedSig);
   }, []);
 
