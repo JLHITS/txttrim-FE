@@ -210,7 +210,6 @@ function smartTrim(text, maxChars, requiredTokens = []) {
   const abbrevs = [
     [/\bappointment\b/gi, "appt"],
     [/\bappointments\b/gi, "appts"],
-    [/\bplease\b/gi, "pls"],
     [/\btelephone\b/gi, "tel"],
     [/\bregarding\b/gi, "re"],
     [/\binformation\b/gi, "info"],
@@ -253,13 +252,8 @@ function smartTrim(text, maxChars, requiredTokens = []) {
     result = result.replace(filler, "");
     result = normalizeWhitespace(result);
   }
-  if (realLength() <= maxChars) return unmaskRequiredTokens(result, map);
-
-  // Step 4: Remove "the " where it's not critical
-  result = result.replace(/\bthe\s+/gi, "");
-  result = normalizeWhitespace(result);
-
-  // No end-chopping: return best effort even if still over the limit.
+  // No "the"-stripping (reads as broken English) and no end-chopping:
+  // return best effort even if still over the limit; the caller flags it.
   return unmaskRequiredTokens(result, map);
 }
 
@@ -451,7 +445,16 @@ function formatTokenCount(totalTokens) {
   return totalTokens > 0 ? totalTokens : "n/a";
 }
 
-async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs) {
+// Models can't count characters, but they estimate word counts far better.
+// ~6.5 chars per English word incl. the trailing space.
+function approxWordBudget(chars) {
+  return Math.max(8, Math.round(chars / 6.5));
+}
+
+// The first attempt runs at "minimal" reasoning for speed. Retries escalate
+// to "low": condensing a message means deciding which clause to drop, and
+// minimal-effort nano models only swap words instead of restructuring.
+async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs, reasoningEffort = "minimal") {
   const timeoutMs = getCallTimeoutMs(deadlineTs, AI_CALL_TIMEOUT_MS);
   if (!timeoutMs) {
     throw new Error("Not enough time left for AI call");
@@ -465,7 +468,7 @@ async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs)
     instructions: systemPrompt,
     input: userPrompt,
     max_output_tokens: maxOutputTokens,
-    reasoning: { effort: "minimal" },
+    reasoning: { effort: reasoningEffort },
     text: { verbosity: "low" },
   }, { timeout: timeoutMs, maxRetries: 0 });
 
@@ -487,12 +490,13 @@ function buildStrictLimitPrompts({
   const overBy = currentDraft.length - maxChars;
 
   const systemPrompt = `You are a precise SMS compressor. Your ONLY job is to shorten the draft below.
-Your output MUST be ${maxChars} characters or fewer. Count every character including spaces and punctuation.
+Your output MUST be ${maxChars} characters or fewer — about ${approxWordBudget(maxChars)} words at most.
 
 Rules:
-- The draft is ${overBy} characters too long. Remove or shorten ${overBy}+ characters worth of words.
-- Use common abbreviations (e.g. "appointment" -> "appt", "please" -> "pls", "and" -> "&").
-- Remove filler words ("just", "also", "the" where possible).
+- The draft is ${overBy} characters too long. Cut the least important clause or sentence entirely (e.g. background explanations or benefit statements) rather than abbreviating words.
+- Rephrase long constructions into short natural ones (e.g. "For further information visit" -> "Info:").
+- Write in professional full words. Do NOT use txt-speak such as "pls", "thx" or "u".
+- Keep the main action the recipient must take.
 - Keep required tokens exactly as written.
 - Keep language: ${targetLanguage}. Keep tone: ${businessSector}.
 - Return ONLY the final SMS text, nothing else.`;
@@ -523,15 +527,16 @@ function buildRevisionPrompts({
     : "";
 
   const systemPrompt = `You are an expert SMS editor.
-Rewrite the draft to be concise without losing meaning.
+Rewrite the draft to be concise without losing the core message.
 
 Rules:
-- Maximum length: ${maxChars} characters.
+- Maximum length: ${maxChars} characters — about ${approxWordBudget(maxChars)} words at most.
 - Language: ${targetLanguage}.
 - Tone: ${businessSector}.
 - Keep all required tokens exactly as written.
-- Keep key intent, action, dates/times, and contact details.
-- Do NOT cut words or end abruptly.
+- Keep the key action, dates/times, and contact details.
+- If it cannot fit, drop secondary details or whole background sentences; never abbreviate into txt-speak (no "pls", "thx", "u").
+- Do NOT cut words mid-sentence or end abruptly.
 - Return ONLY the final SMS text.`;
 
   const userPrompt = `Original message:
@@ -605,6 +610,7 @@ async function shortenWithRetries({
         revisionPrompts.userPrompt,
         maxChars,
         deadlineTs,
+        "low",
       );
 
       totalTokens += getTokenCount(revisionResult.usage);
@@ -674,16 +680,19 @@ export default async function handler(req, res) {
     ? "CRITICAL: Do NOT change, delete, or translate any text inside [square brackets] (e.g. [Date]). Keep them exactly as is."
     : "";
 
+  const aimWords = approxWordBudget(aimChars);
   const task =
     targetLanguage && targetLanguage !== "English"
-      ? `Task: Translate the message to ${targetLanguage} FIRST, and THEN shorten the translated text. Aim for ${aimChars} characters or fewer; never exceed ${maxChars} characters.`
-      : `Task: Shorten the message in English. Aim for ${aimChars} characters or fewer; never exceed ${maxChars} characters.`;
+      ? `Task: Translate the message to ${targetLanguage} FIRST, and THEN shorten the translated text. Aim for ${aimChars} characters (about ${aimWords} words) or fewer; never exceed ${maxChars} characters.`
+      : `Task: Shorten the message in English. Aim for ${aimChars} characters (about ${aimWords} words) or fewer; never exceed ${maxChars} characters.`;
 
   const systemPrompt = role;
   const initialUserPrompt = `${task}
 
 Rules:
-- Maintain the original meaning, key actions, dates/times, and contact details.
+- Keep the key action the recipient must take, plus any dates/times and contact details.
+- If everything cannot fit, drop secondary details or whole background sentences (e.g. explanations of benefits) — do not try to keep every sentence.
+- Write in professional full words. Do NOT use txt-speak such as "pls", "thx" or "u".
 - Tone: ${businessSector}.
 - ${protection}
 - Keep every link. Do not drop, alter, or shorten links yourself.
@@ -740,6 +749,7 @@ Message to process: ${processedText}`;
           strictPrompts.userPrompt,
           maxChars,
           deadlineTs,
+          "low",
         );
 
         const strictCandidate = sanitizeModelOutput(strictResult.text);
