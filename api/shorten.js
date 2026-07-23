@@ -451,10 +451,11 @@ function approxWordBudget(chars) {
   return Math.max(8, Math.round(chars / 6.5));
 }
 
-// The first attempt runs at "minimal" reasoning for speed. Retries escalate
-// to "low": condensing a message means deciding which clause to drop, and
-// minimal-effort nano models only swap words instead of restructuring.
-async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs, reasoningEffort = "minimal") {
+// The first attempt runs at "low" reasoning for speed (the gpt-5.4-nano model
+// does not support "minimal"). Retries also use "low": condensing a message
+// means deciding which clause to drop, and low-effort nano models only swap
+// words instead of restructuring.
+async function generateModelText(systemPrompt, userPrompt, maxChars, deadlineTs, reasoningEffort = "low") {
   const timeoutMs = getCallTimeoutMs(deadlineTs, AI_CALL_TIMEOUT_MS);
   if (!timeoutMs) {
     throw new Error("Not enough time left for AI call");
